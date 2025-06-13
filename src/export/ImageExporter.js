@@ -1,6 +1,6 @@
 /**
  * ImageExporter.js - High-Resolution Image Export System
- * Handles capturing and exporting viewport images for marketplaces
+ * Handles capturing and exporting viewport images with correct aspect ratios
  */
 
 import * as THREE from 'three';
@@ -19,12 +19,13 @@ export class ImageExporter {
       preserveDrawingBuffer: true
     };
     
-    // Resolution presets
+    // Resolution presets with correct aspect ratios
     this.resolutionPresets = {
       turbosquid_search: { width: 1920, height: 1920 }, // Square for search images
-      turbosquid_product: { width: 1920, height: 1080 }, // Product shots
-      cgtrader_main: { width: 1920, height: 1440 }, // CGTrader 1.33 ratio
-      ultra_hd: { width: 3840, height: 2160 }, // 4K
+      turbosquid_product: { width: 1920, height: 1080 }, // 16:9 for product shots
+      cgtrader_main: { width: 1920, height: 1440 }, // 4:3 ratio
+      square: { width: 2048, height: 2048 }, // Perfect square
+      ultra_hd: { width: 3840, height: 2160 }, // 4K 16:9
       print_ready: { width: 7680, height: 4320 } // 8K for print
     };
     
@@ -48,7 +49,7 @@ export class ImageExporter {
   }
 
   /**
-   * Capture single viewport at high resolution
+   * Capture single viewport at high resolution with correct aspect ratio
    */
   async captureView(viewName, options = {}) {
     if (!this.scene) {
@@ -61,21 +62,28 @@ export class ImageExporter {
     }
     
     // Prepare export settings
-    const exportOptions = this.prepareExportOptions(options);
+    const exportOptions = this.prepareExportOptions(viewName, options);
     
-    // For now, capture from existing renderer
+    // Get the current canvas
     const canvas = this.renderer.canvases[viewName];
     if (!canvas) {
       throw new Error(`Canvas not found for view: ${viewName}`);
     }
     
-    // Simple capture from current canvas
-    const imageData = canvas.toDataURL(exportOptions.format, exportOptions.quality);
+    let imageData;
+    
+    if (exportOptions.highResolution) {
+      // High-resolution export using off-screen rendering
+      imageData = await this.captureHighResolution(viewName, camera, exportOptions);
+    } else {
+      // Simple capture from current canvas with aspect ratio correction
+      imageData = await this.captureCurrentResolution(viewName, camera, exportOptions);
+    }
     
     return {
       viewName,
       imageData,
-      resolution: { width: canvas.width, height: canvas.height },
+      resolution: exportOptions.resolution,
       format: exportOptions.format,
       timestamp: new Date().toISOString(),
       filename: this.generateFilename(viewName, exportOptions)
@@ -83,7 +91,123 @@ export class ImageExporter {
   }
 
   /**
-   * Capture multiple views
+   * Capture at current resolution with aspect ratio maintained
+   */
+  async captureCurrentResolution(viewName, camera, options) {
+    const canvas = this.renderer.canvases[viewName];
+    
+    // Get current canvas size and aspect ratio
+    const canvasSize = this.renderer.getCanvasSize(viewName);
+    if (!canvasSize) {
+      // Fallback to direct canvas capture
+      return canvas.toDataURL(options.format, options.quality);
+    }
+    
+    // Ensure camera has correct aspect ratio
+    this.updateCameraAspectRatio(camera, canvasSize.aspectRatio);
+    
+    // Re-render with correct aspect ratio
+    this.renderer.renderSingle(viewName, this.scene, camera, {
+      background: options.background
+    });
+    
+    return canvas.toDataURL(options.format, options.quality);
+  }
+
+  /**
+   * Capture at high resolution using off-screen renderer
+   */
+  async captureHighResolution(viewName, camera, options) {
+    const { renderer: offscreenRenderer, canvas: offscreenCanvas } = 
+      this.renderer.createOffscreenRenderer(options.resolution.width, options.resolution.height);
+    
+    try {
+      // Calculate aspect ratio for export
+      const exportAspect = options.resolution.width / options.resolution.height;
+      
+      // Create camera with correct aspect ratio for export
+      const exportCamera = this.createExportCamera(camera, exportAspect);
+      
+      // Render at high resolution
+      const sceneObject = this.scene.getScene();
+      
+      // Apply background if specified
+      const originalBackground = sceneObject.background;
+      if (options.background !== undefined) {
+        sceneObject.background = options.background;
+      }
+      
+      offscreenRenderer.render(sceneObject, exportCamera);
+      
+      // Capture image
+      const imageData = offscreenCanvas.toDataURL(options.format, options.quality);
+      
+      // Restore original background
+      if (options.background !== undefined) {
+        sceneObject.background = originalBackground;
+      }
+      
+      return imageData;
+      
+    } finally {
+      // Always cleanup
+      offscreenRenderer.dispose();
+    }
+  }
+
+  /**
+   * Create export camera with correct aspect ratio
+   */
+  createExportCamera(originalCamera, aspectRatio) {
+    if (originalCamera.isOrthographicCamera) {
+      const frustumSize = this.cameraManager.frustumSize || 4;
+      
+      const exportCamera = new THREE.OrthographicCamera(
+        -frustumSize * aspectRatio / 2,  // left
+        frustumSize * aspectRatio / 2,   // right
+        frustumSize / 2,                 // top
+        -frustumSize / 2,                // bottom
+        originalCamera.near,
+        originalCamera.far
+      );
+      
+      // Copy position and orientation
+      exportCamera.position.copy(originalCamera.position);
+      exportCamera.lookAt(this.cameraManager.target);
+      exportCamera.up.copy(originalCamera.up);
+      exportCamera.updateProjectionMatrix();
+      
+      return exportCamera;
+    } else {
+      // For perspective cameras
+      const exportCamera = originalCamera.clone();
+      exportCamera.aspect = aspectRatio;
+      exportCamera.updateProjectionMatrix();
+      return exportCamera;
+    }
+  }
+
+  /**
+   * Update camera aspect ratio
+   */
+  updateCameraAspectRatio(camera, aspectRatio) {
+    if (camera.isOrthographicCamera) {
+      const frustumSize = this.cameraManager.frustumSize || 4;
+      
+      camera.left = -frustumSize * aspectRatio / 2;
+      camera.right = frustumSize * aspectRatio / 2;
+      camera.top = frustumSize / 2;
+      camera.bottom = -frustumSize / 2;
+      
+      camera.updateProjectionMatrix();
+    } else if (camera.isPerspectiveCamera) {
+      camera.aspect = aspectRatio;
+      camera.updateProjectionMatrix();
+    }
+  }
+
+  /**
+   * Capture multiple views with consistent aspect ratios
    */
   async captureAllViews(options = {}) {
     const viewNames = ['front', 'back', 'left', 'right', 'top', 'bottom'];
@@ -111,18 +235,26 @@ export class ImageExporter {
   }
 
   /**
-   * Prepare export options with defaults
+   * Prepare export options with defaults and aspect ratio handling
    */
-  prepareExportOptions(options) {
+  prepareExportOptions(viewName, options) {
+    // Get current canvas size for aspect ratio reference
+    const canvasSize = this.renderer.getCanvasSize(viewName);
+    const currentAspect = canvasSize ? canvasSize.aspectRatio : 1.0;
+    
     const defaults = {
-      resolution: this.resolutionPresets.turbosquid_product,
+      resolution: canvasSize ? {
+        width: Math.floor(canvasSize.width * 2), // 2x current size
+        height: Math.floor(canvasSize.height * 2)
+      } : this.resolutionPresets.turbosquid_product,
       format: 'image/png',
       quality: 0.95,
-      background: 'turbosquid',
+      background: this.backgroundPresets.turbosquid,
       wireframe: false,
       shadows: true,
       antiAlias: true,
-      filename: null
+      filename: null,
+      highResolution: false
     };
     
     const exportOptions = { ...defaults, ...options };
@@ -132,9 +264,28 @@ export class ImageExporter {
       exportOptions.resolution = this.resolutionPresets[exportOptions.resolution] || defaults.resolution;
     }
     
+    // Ensure resolution maintains aspect ratio if not explicitly set
+    if (options.maintainAspectRatio !== false && canvasSize) {
+      const targetWidth = exportOptions.resolution.width;
+      const targetHeight = Math.floor(targetWidth / currentAspect);
+      
+      exportOptions.resolution = {
+        width: targetWidth,
+        height: targetHeight
+      };
+      
+      console.log(`📐 Maintaining aspect ratio ${currentAspect.toFixed(2)} for ${viewName}: ${targetWidth}x${targetHeight}`);
+    }
+    
     // Resolve background
     if (typeof exportOptions.background === 'string') {
       exportOptions.background = this.backgroundPresets[exportOptions.background];
+    }
+    
+    // Determine if high-resolution export is needed
+    if (canvasSize) {
+      const scaleFactor = exportOptions.resolution.width / canvasSize.renderWidth;
+      exportOptions.highResolution = scaleFactor > 1.5; // Use high-res for significant upscaling
     }
     
     return exportOptions;
@@ -182,7 +333,7 @@ export class ImageExporter {
     const wireframeOptions = {
       ...options,
       wireframe: true,
-      background: 'white', // Better contrast for wireframe
+      background: this.backgroundPresets.white, // Better contrast for wireframe
       shadows: false
     };
     
@@ -223,7 +374,7 @@ export class ImageExporter {
   }
 
   /**
-   * Create contact sheet (grid of all views)
+   * Create contact sheet with proper aspect ratios
    */
   async createContactSheet(options = {}) {
     const {
@@ -235,14 +386,14 @@ export class ImageExporter {
       labels = true
     } = options;
     
-    // Capture all views at smaller resolution
-    const viewSize = {
-      width: Math.floor((resolution.width - padding * (cols + 1)) / cols),
-      height: Math.floor((resolution.height - padding * (rows + 1)) / rows)
-    };
+    // Calculate individual view size maintaining aspect ratio
+    const viewWidth = Math.floor((resolution.width - padding * (cols + 1)) / cols);
+    const viewHeight = Math.floor((resolution.height - padding * (rows + 1)) / rows);
     
+    // Capture all views at calculated size
     const views = await this.captureAllViews({
-      resolution: viewSize,
+      resolution: { width: viewWidth, height: viewHeight },
+      maintainAspectRatio: true,
       ...options
     });
     
@@ -267,8 +418,8 @@ export class ImageExporter {
       const col = i % cols;
       const row = Math.floor(i / cols);
       
-      const x = padding + col * (viewSize.width + padding);
-      const y = padding + row * (viewSize.height + padding);
+      const x = padding + col * (viewWidth + padding);
+      const y = padding + row * (viewHeight + padding);
       
       // Create image element
       const img = new Image();
@@ -277,8 +428,8 @@ export class ImageExporter {
         img.src = view.imageData;
       });
       
-      // Draw image
-      ctx.drawImage(img, x, y, viewSize.width, viewSize.height);
+      // Draw image maintaining aspect ratio
+      ctx.drawImage(img, x, y, viewWidth, viewHeight);
       
       // Draw label if enabled
       if (labels) {
@@ -287,8 +438,8 @@ export class ImageExporter {
         ctx.textAlign = 'center';
         ctx.fillText(
           this.getViewDisplayName(viewNames[i]),
-          x + viewSize.width / 2,
-          y + viewSize.height + 30
+          x + viewWidth / 2,
+          y + viewHeight + 30
         );
       }
     }
