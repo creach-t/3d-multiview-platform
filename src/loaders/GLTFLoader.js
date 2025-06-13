@@ -34,7 +34,7 @@ export class GLTFModelLoader {
     }
     
     // Set loading manager
-    this.loader.setManager(this.loadingManager);
+    this.loader.manager = this.loadingManager;
   }
 
   /**
@@ -191,15 +191,6 @@ export class GLTFModelLoader {
         geometry.computeBoundingBox();
         geometry.computeBoundingSphere();
         
-        // Optimize geometry
-        if (geometry.index === null && geometry.attributes.position.count > 3) {
-          // Add index buffer if missing (can reduce memory usage)
-          const indexedGeometry = geometry.toNonIndexed();
-          if (indexedGeometry.index) {
-            child.geometry = indexedGeometry;
-          }
-        }
-        
         geometryCount++;
       }
     });
@@ -251,7 +242,6 @@ export class GLTFModelLoader {
       }
     });
     
-    // Note: In a real implementation, you'd track all materials and dispose unused ones
     console.log(`📝 Found ${usedMaterials.size} used materials`);
   }
 
