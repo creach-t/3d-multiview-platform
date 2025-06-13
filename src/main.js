@@ -111,7 +111,7 @@ class MultiViewPlatform {
   }
 
   /**
-   * Initialize core 3D components
+   * Initialize core 3D components with proper aspect ratio handling
    */
   async initCore3D() {
     // Initialize scene
@@ -122,6 +122,9 @@ class MultiViewPlatform {
     
     // Initialize camera manager for 6 orthographic views
     this.cameraManager = new CameraManager();
+    
+    // IMPORTANT: Connect renderer to camera manager for aspect ratio sync
+    this.renderer.setCameraManager(this.cameraManager);
     
     // Initialize controls (synchronized across all views)
     this.controls = new Controls(this.cameraManager, this.renderer);
@@ -135,8 +138,48 @@ class MultiViewPlatform {
     // Setup background
     this.scene.setupBackground(this.settings.background);
     
+    // Initial aspect ratio update
+    this.updateAspectRatios();
+    
     // Start render loop
     this.startRenderLoop();
+    
+    console.log('📐 Core 3D components initialized with aspect ratio synchronization');
+  }
+
+  /**
+   * Update aspect ratios for all viewports
+   */
+  updateAspectRatios() {
+    const viewportSizes = {};
+    
+    Object.entries(this.viewports).forEach(([viewName, viewport]) => {
+      const rect = viewport.getBoundingClientRect();
+      
+      // Get the actual canvas area (excluding header)
+      const header = viewport.querySelector('.viewport-header');
+      const headerHeight = header ? header.offsetHeight : 0;
+      
+      const canvasHeight = rect.height - headerHeight;
+      const canvasWidth = rect.width;
+      
+      viewportSizes[viewName] = {
+        width: canvasWidth,
+        height: canvasHeight
+      };
+      
+      console.log(`📏 ${viewName}: ${canvasWidth}x${canvasHeight} (ratio: ${(canvasWidth/canvasHeight).toFixed(2)})`);
+    });
+    
+    // Update camera manager with new aspect ratios
+    if (this.cameraManager) {
+      this.cameraManager.updateAspectRatios(viewportSizes);
+    }
+    
+    // Update renderer sizes
+    if (this.renderer) {
+      this.renderer.updateAllSizes();
+    }
   }
 
   /**
@@ -191,7 +234,7 @@ class MultiViewPlatform {
    * Setup global event listeners
    */
   setupEventListeners() {
-    // Window resize
+    // Window resize with aspect ratio update
     window.addEventListener('resize', () => this.handleResize());
     
     // Keyboard shortcuts
@@ -385,15 +428,20 @@ class MultiViewPlatform {
   }
 
   /**
-   * Handle window resize
+   * Handle window resize with aspect ratio updates
    */
   handleResize() {
+    console.log('🔄 Handling resize with aspect ratio update...');
+    
+    // Update renderer sizes first
     if (this.renderer) {
       this.renderer.handleResize();
     }
-    if (this.cameraManager) {
-      this.cameraManager.updateAspectRatios();
-    }
+    
+    // Then update aspect ratios
+    setTimeout(() => {
+      this.updateAspectRatios();
+    }, 100);
   }
 
   /**
@@ -523,7 +571,7 @@ class MultiViewPlatform {
   }
 
   /**
-   * Capture single view
+   * Capture single view with correct aspect ratio
    */
   async captureView(viewName) {
     if (!this.currentModel) {
@@ -545,7 +593,17 @@ class MultiViewPlatform {
         viewport.classList.add('capturing');
       }
       
-      const result = await this.imageExporter.captureView(viewName, this.settings);
+      // Get viewport dimensions for correct aspect ratio
+      const canvasSize = this.renderer.getCanvasSize(viewName);
+      const exportSettings = {
+        ...this.settings,
+        resolution: canvasSize ? {
+          width: Math.floor(canvasSize.width * 2), // 2x for quality
+          height: Math.floor(canvasSize.height * 2)
+        } : undefined
+      };
+      
+      const result = await this.imageExporter.captureView(viewName, exportSettings);
       
       // Download the image
       this.downloadImage(result.imageData, result.filename || `${viewName}_view.png`);
@@ -565,7 +623,7 @@ class MultiViewPlatform {
   }
 
   /**
-   * Handle export all views
+   * Handle export all views with correct aspect ratios
    */
   async handleExportAll() {
     if (!this.currentModel) {
@@ -585,8 +643,14 @@ class MultiViewPlatform {
       // Get template
       const template = this.templates.getTemplate(this.settings.marketplace);
       
+      // Prepare export settings with proper aspect ratios
+      const exportSettings = {
+        ...this.settings,
+        canvasSizes: this.renderer.getAllCanvasSizes()
+      };
+      
       // Export all views
-      const results = await this.batchProcessor.exportAll(this.settings, template);
+      const results = await this.batchProcessor.exportAll(exportSettings, template);
       
       this.hideLoading();
       
