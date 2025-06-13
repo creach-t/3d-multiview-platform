@@ -44,7 +44,7 @@ export class Controls {
     // Sensitivity settings
     this.rotateSpeed = 1.0;
     this.zoomSpeed = 0.95;
-    this.panSpeed = 2.0;
+    this.panSpeed = 1.0; // Adjusted for better feel
     
     // Internal state
     this.spherical = new THREE.Spherical();
@@ -58,7 +58,7 @@ export class Controls {
     this.onWindowResize = this.onWindowResize.bind(this);
     
     this.setupEventListeners();
-    console.log('🎮 Controls initialized');
+    console.log('🎮 Controls initialized with improved drag support');
   }
 
   /**
@@ -278,13 +278,13 @@ export class Controls {
     switch (this.mouseState.button) {
       case 0: // Left mouse button - orbit/rotate
         if (this.enableRotate) {
-          this.orbit(-delta.x * this.rotateSpeed * 2, -delta.y * this.rotateSpeed * 2, viewName);
+          this.orbit(-delta.x * this.rotateSpeed * 3, -delta.y * this.rotateSpeed * 3, viewName);
         }
         break;
         
       case 2: // Right mouse button - pan
         if (this.enablePan) {
-          this.pan(delta.x * this.panSpeed * 5, delta.y * this.panSpeed * 5, viewName);
+          this.pan(delta.x * this.panSpeed, delta.y * this.panSpeed, viewName);
         }
         break;
         
@@ -373,7 +373,7 @@ export class Controls {
     // Don't interfere with form inputs
     if (event.target.tagName === 'INPUT' || event.target.tagName === 'SELECT') return;
     
-    const step = 0.1;
+    const step = 0.05; // Made smaller for more precise control
     const zoomStep = 0.1;
     
     switch (event.code) {
@@ -436,17 +436,20 @@ export class Controls {
   }
 
   /**
-   * Orbit around target (improved for orthographic cameras)
+   * Orbit around target (now uses CameraManager's orbit method if available)
    */
   orbit(deltaAzimuth, deltaPolar, viewName = 'front') {
-    if (!this.enableRotate) return;
+    if (!this.enableRotate || !this.cameraManager) return;
     
-    // For orthographic cameras, we'll implement pan instead of true rotation
-    // since orthographic cameras have fixed positions for each view
-    console.log(`Orbit: ${deltaAzimuth.toFixed(3)}, ${deltaPolar.toFixed(3)} for ${viewName}`);
-    
-    // Use pan for now - this gives immediate visual feedback
-    this.pan(deltaAzimuth * 0.5, deltaPolar * 0.5, viewName);
+    // Use CameraManager's orbit method if available, otherwise fall back to pan
+    if (typeof this.cameraManager.orbit === 'function') {
+      this.cameraManager.orbit(deltaAzimuth, deltaPolar);
+      console.log(`Orbit: ${deltaAzimuth.toFixed(3)}, ${deltaPolar.toFixed(3)} via CameraManager`);
+    } else {
+      // Fallback to pan for visual feedback
+      this.pan(deltaAzimuth * 0.5, deltaPolar * 0.5, viewName);
+      console.log(`Orbit fallback to pan: ${deltaAzimuth.toFixed(3)}, ${deltaPolar.toFixed(3)}`);
+    }
   }
 
   /**
