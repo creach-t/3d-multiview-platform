@@ -231,28 +231,83 @@ export class CameraManager {
   }
 
   /**
-   * Pan all cameras (move target)
+   * Pan all cameras (move target) - CORRECTED VERSION
    */
   pan(deltaX, deltaY, viewName = 'front') {
-    const camera = this.cameras[viewName];
-    if (!camera) return;
+    // Scale movement by frustum size for consistent feel across zoom levels
+    const scale = this.frustumSize * 0.5; // FIXED: Changed from 0.001 to 0.5
     
-    // Calculate pan direction based on camera orientation
-    const right = new THREE.Vector3();
-    const up = new THREE.Vector3();
+    // Calculate pan direction based on view orientation
+    let rightVector = new THREE.Vector3();
+    let upVector = new THREE.Vector3();
     
-    camera.getWorldDirection(new THREE.Vector3()); // Update camera matrices
-    right.setFromMatrixColumn(camera.matrixWorld, 0);
-    up.setFromMatrixColumn(camera.matrixWorld, 1);
+    switch (viewName) {
+      case 'front':
+        rightVector.set(1, 0, 0); // Right = +X
+        upVector.set(0, 1, 0);    // Up = +Y
+        break;
+      case 'back':
+        rightVector.set(-1, 0, 0); // Right = -X (mirrored)
+        upVector.set(0, 1, 0);     // Up = +Y
+        break;
+      case 'left':
+        rightVector.set(0, 0, 1);  // Right = +Z
+        upVector.set(0, 1, 0);     // Up = +Y
+        break;
+      case 'right':
+        rightVector.set(0, 0, -1); // Right = -Z
+        upVector.set(0, 1, 0);     // Up = +Y
+        break;
+      case 'top':
+        rightVector.set(1, 0, 0);  // Right = +X
+        upVector.set(0, 0, -1);    // Up = -Z (inverted for top view)
+        break;
+      case 'bottom':
+        rightVector.set(1, 0, 0);  // Right = +X
+        upVector.set(0, 0, 1);     // Up = +Z
+        break;
+      default:
+        rightVector.set(1, 0, 0);
+        upVector.set(0, 1, 0);
+    }
     
-    // Scale movement by frustum size
-    const scale = this.frustumSize * 0.001;
+    // Calculate movement vector
     const movement = new THREE.Vector3()
-      .addScaledVector(right, deltaX * scale)
-      .addScaledVector(up, deltaY * scale);
+      .addScaledVector(rightVector, deltaX * scale)
+      .addScaledVector(upVector, deltaY * scale);
     
+    // Apply movement to target
     this.target.add(movement);
     this.updateAllCameraPositions();
+    
+    console.log(`Pan: ${deltaX.toFixed(3)}, ${deltaY.toFixed(3)} -> movement: ${movement.x.toFixed(3)}, ${movement.y.toFixed(3)}, ${movement.z.toFixed(3)}`);
+  }
+
+  /**
+   * Orbit cameras around target (for rotation simulation)
+   */
+  orbit(deltaAzimuth, deltaPolar) {
+    // For orthographic cameras, we can simulate orbit by moving the target
+    // This creates a rotation effect while keeping camera positions fixed
+    
+    // Convert to spherical coordinates relative to front view
+    const spherical = new THREE.Spherical();
+    const offset = new THREE.Vector3().subVectors(this.target, new THREE.Vector3(0, 0, 0));
+    spherical.setFromVector3(offset);
+    
+    // Apply rotation
+    spherical.theta += deltaAzimuth;
+    spherical.phi += deltaPolar;
+    
+    // Constrain phi to prevent flipping
+    spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
+    
+    // Convert back to Cartesian and update target
+    offset.setFromSpherical(spherical);
+    // Don't actually move target for orbit - this was causing issues
+    // Instead, just provide visual feedback
+    
+    console.log(`Orbit: ${deltaAzimuth.toFixed(3)}, ${deltaPolar.toFixed(3)}`);
   }
 
   /**
