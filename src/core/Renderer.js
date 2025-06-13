@@ -392,6 +392,20 @@ export class Renderer {
   }
 
   /**
+   * Get specific renderer
+   */
+  getRenderer(viewName) {
+    return this.renderers[viewName];
+  }
+
+  /**
+   * Get all renderers
+   */
+  getRenderers() {
+    return { ...this.renderers };
+  }
+
+  /**
    * Dispose of all renderers
    */
   dispose() {
