@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Multi-View Platform - TurboSquid Export Optimizer</title>
+    <meta name="description" content="Plateforme de visualisation 3D multi-vues pour optimiser vos exports TurboSquid et CGTrader">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="/src/css/main.css">
+    <link rel="stylesheet" href="/src/css/viewport.css">
+    <link rel="stylesheet" href="/src/css/controls.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="app-header">
+        <div class="header-content">
+            <h1 class="app-title">
+                <span class="title-icon">🎯</span>
+                3D Multi-View Platform
+            </h1>
+            <div class="header-actions">
+                <span class="version">v1.0.0</span>
+                <a href="https://github.com/creach-t/3d-multiview-platform" target="_blank" class="github-link">
+                    GitHub
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Application -->
+    <main class="app-main">
+        <!-- Control Panel -->
+        <aside class="control-panel">
+            <div class="panel-section">
+                <h3>📁 Import Modèle</h3>
+                <div id="file-upload-zone" class="file-upload-zone">
+                    <div class="upload-content">
+                        <div class="upload-icon">📎</div>
+                        <p class="upload-text">
+                            Glissez votre fichier <strong>.glb</strong> ici<br>
+                            ou <button type="button" id="file-select-btn" class="file-select-btn">sélectionnez un fichier</button>
+                        </p>
+                        <input type="file" id="file-input" accept=".glb,.gltf" hidden>
+                    </div>
+                </div>
+                <div id="file-info" class="file-info hidden">
+                    <span id="file-name" class="file-name"></span>
+                    <span id="file-size" class="file-size"></span>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <h3>🎨 Éclairage</h3>
+                <div class="lighting-presets">
+                    <button type="button" data-preset="studio" class="preset-btn active">Studio</button>
+                    <button type="button" data-preset="natural" class="preset-btn">Naturel</button>
+                    <button type="button" data-preset="dramatic" class="preset-btn">Dramatique</button>
+                    <button type="button" data-preset="technical" class="preset-btn">Technique</button>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <h3>🎭 Arrière-plan</h3>
+                <div class="background-options">
+                    <button type="button" data-background="turbosquid" class="bg-btn active">TurboSquid</button>
+                    <button type="button" data-background="white" class="bg-btn">Blanc</button>
+                    <button type="button" data-background="transparent" class="bg-btn">Transparent</button>
+                    <button type="button" data-background="gradient" class="bg-btn">Gradient</button>
+                </div>
+                <input type="color" id="custom-color" value="#f7f7f7" class="color-picker">
+            </div>
+
+            <div class="panel-section">
+                <h3>⚙️ Contrôles</h3>
+                <div class="controls-group">
+                    <button type="button" id="reset-camera" class="control-btn">
+                        🔄 Reset Caméra
+                    </button>
+                    <button type="button" id="center-model" class="control-btn">
+                        🎯 Centrer Modèle
+                    </button>
+                    <button type="button" id="auto-frame" class="control-btn">
+                        📐 Auto-Cadrage
+                    </button>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <h3>📤 Export</h3>
+                <div class="export-options">
+                    <div class="marketplace-select">
+                        <select id="marketplace-preset">
+                            <option value="turbosquid">TurboSquid</option>
+                            <option value="cgtrader">CGTrader</option>
+                            <option value="custom">Personnalisé</option>
+                        </select>
+                    </div>
+                    <div class="quality-select">
+                        <select id="quality-preset">
+                            <option value="fast">Rapide (720p)</option>
+                            <option value="standard">Standard (1080p)</option>
+                            <option value="high">Haute (1920x1920)</option>
+                            <option value="ultra">Ultra (4K)</option>
+                        </select>
+                    </div>
+                    <button type="button" id="export-all" class="export-btn" disabled>
+                        🚀 Exporter Toutes les Vues
+                    </button>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <h3>📊 Informations</h3>
+                <div id="model-info" class="model-info">
+                    <div class="info-item">
+                        <span class="info-label">Polygones:</span>
+                        <span id="poly-count" class="info-value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Vertices:</span>
+                        <span id="vertex-count" class="info-value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Matériaux:</span>
+                        <span id="material-count" class="info-value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Textures:</span>
+                        <span id="texture-count" class="info-value">-</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Viewport Container -->
+        <section class="viewport-container">
+            <div class="viewport-grid">
+                <!-- Vue Avant -->
+                <div class="viewport" data-view="front">
+                    <div class="viewport-header">
+                        <h4 class="view-title">Vue Avant</h4>
+                        <div class="view-controls">
+                            <button type="button" class="capture-btn" data-view="front">📷</button>
+                        </div>
+                    </div>
+                    <canvas id="canvas-front" class="viewport-canvas"></canvas>
+                </div>
+
+                <!-- Vue Arrière -->
+                <div class="viewport" data-view="back">
+                    <div class="viewport-header">
+                        <h4 class="view-title">Vue Arrière</h4>
+                        <div class="view-controls">
+                            <button type="button" class="capture-btn" data-view="back">📷</button>
+                        </div>
+                    </div>
+                    <canvas id="canvas-back" class="viewport-canvas"></canvas>
+                </div>
+
+                <!-- Vue Gauche -->
+                <div class="viewport" data-view="left">
+                    <div class="viewport-header">
+                        <h4 class="view-title">Vue Gauche</h4>
+                        <div class="view-controls">
+                            <button type="button" class="capture-btn" data-view="left">📷</button>
+                        </div>
+                    </div>
+                    <canvas id="canvas-left" class="viewport-canvas"></canvas>
+                </div>
+
+                <!-- Vue Droite -->
+                <div class="viewport" data-view="right">
+                    <div class="viewport-header">
+                        <h4 class="view-title">Vue Droite</h4>
+                        <div class="view-controls">
+                            <button type="button" class="capture-btn" data-view="right">📷</button>
+                        </div>
+                    </div>
+                    <canvas id="canvas-right" class="viewport-canvas"></canvas>
+                </div>
+
+                <!-- Vue Dessus -->
+                <div class="viewport" data-view="top">
+                    <div class="viewport-header">
+                        <h4 class="view-title">Vue Dessus</h4>
+                        <div class="view-controls">
+                            <button type="button" class="capture-btn" data-view="top">📷</button>
+                        </div>
+                    </div>
+                    <canvas id="canvas-top" class="viewport-canvas"></canvas>
+                </div>
+
+                <!-- Vue Dessous -->
+                <div class="viewport" data-view="bottom">
+                    <div class="viewport-header">
+                        <h4 class="view-title">Vue Dessous</h4>
+                        <div class="view-controls">
+                            <button type="button" class="capture-btn" data-view="bottom">📷</button>
+                        </div>
+                    </div>
+                    <canvas id="canvas-bottom" class="viewport-canvas"></canvas>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <p id="loading-text" class="loading-text">Chargement du modèle...</p>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Scripts -->
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>
