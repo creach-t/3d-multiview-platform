@@ -181,7 +181,7 @@
   text-align: center;
 }
 
-/* Viewport Overlay */
+/* Viewport Overlay - DISABLED to prevent "capture en cours" issue */
 .viewport-overlay {
   position: absolute;
   top: 0;
@@ -201,9 +201,8 @@
   z-index: 5;
 }
 
-.viewport:hover .viewport-overlay {
-  opacity: 1;
-}
+/* REMOVED: .viewport:hover .viewport-overlay { opacity: 1; } 
+   This was causing the "capture en cours" overlay to appear on hover */
 
 /* Camera Position Indicator */
 .camera-indicator {
@@ -221,9 +220,10 @@
   transition: opacity var(--transition-fast);
 }
 
-.viewport:hover .camera-indicator {
+/* ALSO DISABLED camera indicator hover to avoid confusion */
+/* .viewport:hover .camera-indicator {
   opacity: 1;
-}
+} */
 
 /* Grid Lines Overlay (Optional) */
 .viewport.show-grid::before {
@@ -307,6 +307,32 @@
   font-size: var(--font-size-xs);
   font-weight: 600;
   z-index: 20;
+}
+
+/* Capturing State - Only show animation, no text overlay */
+.viewport.capturing {
+  animation: captureFlash 0.3s ease-out;
+}
+
+/* Add visual feedback for capturing without text overlay */
+.viewport.capturing::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  border: 3px solid rgba(99, 102, 241, 0.3);
+  border-top: 3px solid var(--primary-color);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  z-index: 15;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 /* Responsive Viewport Layout */
@@ -444,10 +470,6 @@
 }
 
 /* Special effects for export mode */
-.viewport.capturing {
-  animation: captureFlash 0.3s ease-out;
-}
-
 @keyframes captureFlash {
   0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7); }
   50% { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0.3); }
