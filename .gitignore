@@ -1,0 +1,148 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build outputs
+dist/
+build/
+.output/
+.vite/
+.nitro/
+.cache/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs
+*.log
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+.nyc_output/
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Yarn Integrity file
+.yarn-integrity
+
+# parcel-bundler cache
+.parcel-cache
+
+# next.js build output
+.next
+
+# nuxt.js build output
+.nuxt
+
+# vuepress build output
+.vuepress/dist
+
+# Serverless directories
+.serverless
+
+# Temporary folders
+tmp/
+temp/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Local Netlify folder
+.netlify
+
+# Stores VSCode versions used for testing VSCode extensions
+.vscode-test
+
+# Testing
+coverage/
+.coverage
+htmlcov/
+.pytest_cache/
+.cache
+
+# Local development
+.local
+.dev
+
+# 3D Model files (examples - comment out if you want to include them)
+# *.glb
+# *.gltf
+# *.fbx
+# *.obj
+# *.dae
+
+# Export outputs (generated images)
+exports/
+output/
+screenshots/
+renders/
+
+# Backup files
+*.backup
+*.bak
+*.orig
+
+# Lock files (keep package-lock.json but ignore others)
+yarn.lock
+pnpm-lock.yaml
+
+# Generated documentation
+docs/dist/
+docs/.vitepress/cache/
+
+# Profiling and performance files
+*.cpuprofile
+*.heapprofile
+*.heapsnapshot
+
+# WASM files
+*.wasm
+
+# Local configuration overrides
+config.local.js
+config.local.json
