@@ -50,6 +50,13 @@ export class Controls {
     this.spherical = new THREE.Spherical();
     this.sphericalDelta = new THREE.Spherical();
     
+    // Bind methods to maintain context
+    this.onDocumentMouseMove = this.onDocumentMouseMove.bind(this);
+    this.onDocumentMouseUp = this.onDocumentMouseUp.bind(this);
+    this.onKeyDown = this.onKeyDown.bind(this);
+    this.onKeyUp = this.onKeyUp.bind(this);
+    this.onWindowResize = this.onWindowResize.bind(this);
+    
     this.setupEventListeners();
     console.log('🎮 Controls initialized');
   }
@@ -63,34 +70,52 @@ export class Controls {
     });
     
     // Global keyboard listeners
-    document.addEventListener('keydown', (e) => this.onKeyDown(e));
-    document.addEventListener('keyup', (e) => this.onKeyUp(e));
+    document.addEventListener('keydown', this.onKeyDown);
+    document.addEventListener('keyup', this.onKeyUp);
     
     // Window events
-    window.addEventListener('resize', () => this.onWindowResize());
+    window.addEventListener('resize', this.onWindowResize);
   }
 
   /**
    * Setup event listeners for a specific canvas
    */
   setupCanvasListeners(canvas, viewName) {
+    // Create bound event handlers for this specific canvas
+    const boundHandlers = {
+      mouseDown: (e) => this.onMouseDown(e, viewName),
+      mouseMove: (e) => this.onMouseMove(e, viewName),
+      mouseUp: (e) => this.onMouseUp(e, viewName),
+      wheel: (e) => this.onMouseWheel(e, viewName),
+      touchStart: (e) => this.onTouchStart(e, viewName),
+      touchMove: (e) => this.onTouchMove(e, viewName),
+      touchEnd: (e) => this.onTouchEnd(e, viewName),
+      contextMenu: (e) => e.preventDefault()
+    };
+    
+    // Store handlers for cleanup
+    canvas._controlHandlers = boundHandlers;
+    
     // Mouse events
-    canvas.addEventListener('mousedown', (e) => this.onMouseDown(e, viewName));
-    canvas.addEventListener('mousemove', (e) => this.onMouseMove(e, viewName));
-    canvas.addEventListener('mouseup', (e) => this.onMouseUp(e, viewName));
-    canvas.addEventListener('wheel', (e) => this.onMouseWheel(e, viewName));
+    canvas.addEventListener('mousedown', boundHandlers.mouseDown);
+    canvas.addEventListener('mousemove', boundHandlers.mouseMove);
+    canvas.addEventListener('mouseup', boundHandlers.mouseUp);
+    canvas.addEventListener('wheel', boundHandlers.wheel);
     
     // Touch events for mobile
-    canvas.addEventListener('touchstart', (e) => this.onTouchStart(e, viewName));
-    canvas.addEventListener('touchmove', (e) => this.onTouchMove(e, viewName));
-    canvas.addEventListener('touchend', (e) => this.onTouchEnd(e, viewName));
+    canvas.addEventListener('touchstart', boundHandlers.touchStart);
+    canvas.addEventListener('touchmove', boundHandlers.touchMove);
+    canvas.addEventListener('touchend', boundHandlers.touchEnd);
     
     // Context menu
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    canvas.addEventListener('contextmenu', boundHandlers.contextMenu);
     
     // Focus events
     canvas.addEventListener('mouseenter', () => canvas.focus());
     canvas.tabIndex = 0; // Make canvas focusable
+    
+    // Set cursor style
+    canvas.style.cursor = 'grab';
   }
 
   /**
@@ -112,12 +137,15 @@ export class Controls {
     
     this.mouseState.currentPosition.copy(this.mouseState.previousPosition);
     
-    // Change cursor
-    event.target.style.cursor = 'grabbing';
+    // Change cursor based on action
+    const cursor = this.getCursorForAction(event.button);
+    event.target.style.cursor = cursor;
     
     // Add global mouse move and up listeners
     document.addEventListener('mousemove', this.onDocumentMouseMove);
     document.addEventListener('mouseup', this.onDocumentMouseUp);
+    
+    console.log(`Mouse down: ${viewName}, button: ${event.button}`);
   }
 
   /**
@@ -136,7 +164,7 @@ export class Controls {
     
     this.mouseState.deltaPosition
       .subVectors(this.mouseState.currentPosition, this.mouseState.previousPosition)
-      .multiplyScalar(1 / rect.height); // Normalize by canvas height
+      .multiplyScalar(1 / Math.max(rect.height, rect.width)); // Normalize by canvas size
     
     this.handleMouseMovement(viewName);
     
@@ -158,6 +186,67 @@ export class Controls {
     // Remove global listeners
     document.removeEventListener('mousemove', this.onDocumentMouseMove);
     document.removeEventListener('mouseup', this.onDocumentMouseUp);
+    
+    console.log(`Mouse up: ${viewName}`);
+  }
+
+  /**
+   * Document mouse move handler (for dragging outside canvas)
+   */
+  onDocumentMouseMove(event) {
+    if (!this.isEnabled || !this.mouseState.isDown) return;
+    
+    // Find the active canvas
+    const activeCanvas = Object.values(this.canvases).find(canvas => 
+      canvas.style.cursor !== 'grab'
+    );
+    
+    if (activeCanvas) {
+      const rect = activeCanvas.getBoundingClientRect();
+      this.mouseState.currentPosition.set(
+        event.clientX - rect.left,
+        event.clientY - rect.top
+      );
+      
+      this.mouseState.deltaPosition
+        .subVectors(this.mouseState.currentPosition, this.mouseState.previousPosition)
+        .multiplyScalar(1 / Math.max(rect.height, rect.width));
+      
+      this.handleMouseMovement('global');
+      
+      this.mouseState.previousPosition.copy(this.mouseState.currentPosition);
+    }
+  }
+
+  /**
+   * Document mouse up handler
+   */
+  onDocumentMouseUp(event) {
+    if (!this.isEnabled) return;
+    
+    this.mouseState.isDown = false;
+    this.mouseState.button = -1;
+    
+    // Reset all canvas cursors
+    Object.values(this.canvases).forEach(canvas => {
+      canvas.style.cursor = 'grab';
+    });
+    
+    // Remove global listeners
+    document.removeEventListener('mousemove', this.onDocumentMouseMove);
+    document.removeEventListener('mouseup', this.onDocumentMouseUp);
+  }
+
+  /**
+   * Get cursor style for action
+   */
+  getCursorForAction(button) {
+    switch (button) {
+      case 0: return 'grabbing'; // Left - rotate/orbit
+      case 1: return 'ns-resize'; // Middle - zoom
+      case 2: return 'move'; // Right - pan
+      default: return 'grabbing';
+    }
   }
 
   /**
@@ -172,6 +261,8 @@ export class Controls {
     const zoomFactor = delta > 0 ? 1 / this.zoomSpeed : this.zoomSpeed;
     
     this.zoom(zoomFactor);
+    
+    console.log(`Zoom: ${viewName}, factor: ${zoomFactor.toFixed(2)}`);
   }
 
   /**
@@ -180,19 +271,29 @@ export class Controls {
   handleMouseMovement(viewName) {
     const delta = this.mouseState.deltaPosition;
     
-    if (this.mouseState.button === 0) { // Left mouse button
-      if (this.enableRotate) {
-        this.rotate(-delta.x * this.rotateSpeed, -delta.y * this.rotateSpeed);
-      }
-    } else if (this.mouseState.button === 2) { // Right mouse button
-      if (this.enablePan) {
-        this.pan(delta.x * this.panSpeed, delta.y * this.panSpeed, viewName);
-      }
-    } else if (this.mouseState.button === 1) { // Middle mouse button
-      if (this.enableZoom) {
-        const zoomFactor = 1 + (-delta.y * 2);
-        this.zoom(zoomFactor);
-      }
+    if (Math.abs(delta.x) < 0.001 && Math.abs(delta.y) < 0.001) {
+      return; // Too small movement, ignore
+    }
+    
+    switch (this.mouseState.button) {
+      case 0: // Left mouse button - orbit/rotate
+        if (this.enableRotate) {
+          this.orbit(-delta.x * this.rotateSpeed * 2, -delta.y * this.rotateSpeed * 2, viewName);
+        }
+        break;
+        
+      case 2: // Right mouse button - pan
+        if (this.enablePan) {
+          this.pan(delta.x * this.panSpeed * 5, delta.y * this.panSpeed * 5, viewName);
+        }
+        break;
+        
+      case 1: // Middle mouse button - zoom
+        if (this.enableZoom) {
+          const zoomFactor = 1 + (-delta.y * 3);
+          this.zoom(zoomFactor);
+        }
+        break;
     }
   }
 
@@ -232,7 +333,7 @@ export class Controls {
       const deltaY = (touches[0].clientY - this.touchState.touches[0].clientY) / rect.height;
       
       if (this.enableRotate) {
-        this.rotate(-deltaX * this.rotateSpeed * 2, -deltaY * this.rotateSpeed * 2);
+        this.orbit(-deltaX * this.rotateSpeed * 2, -deltaY * this.rotateSpeed * 2, viewName);
       }
     } else if (touches.length === 2) {
       // Two fingers - zoom and pan
@@ -329,46 +430,55 @@ export class Controls {
       };
     });
     
-    this.cameraManager.updateAspectRatios(viewportSizes);
+    if (this.cameraManager && typeof this.cameraManager.updateAspectRatios === 'function') {
+      this.cameraManager.updateAspectRatios(viewportSizes);
+    }
   }
 
   /**
-   * Rotate around target
+   * Orbit around target (improved for orthographic cameras)
    */
-  rotate(deltaAzimuth, deltaPolar) {
+  orbit(deltaAzimuth, deltaPolar, viewName = 'front') {
     if (!this.enableRotate) return;
     
-    // This is a simplified rotation - in a real implementation,
-    // you might want to implement proper spherical coordinates
-    const rotationSpeed = 0.5;
+    // For orthographic cameras, we'll implement pan instead of true rotation
+    // since orthographic cameras have fixed positions for each view
+    console.log(`Orbit: ${deltaAzimuth.toFixed(3)}, ${deltaPolar.toFixed(3)} for ${viewName}`);
     
-    // For now, we'll implement a simple pan instead of true rotation
-    // since orthographic cameras are fixed in position
-    this.pan(deltaAzimuth * rotationSpeed, deltaPolar * rotationSpeed);
+    // Use pan for now - this gives immediate visual feedback
+    this.pan(deltaAzimuth * 0.5, deltaPolar * 0.5, viewName);
   }
 
   /**
    * Zoom in/out (change frustum size)
    */
   zoom(factor) {
-    if (!this.enableZoom) return;
+    if (!this.enableZoom || !this.cameraManager) return;
     
-    const currentSize = this.cameraManager.frustumSize;
+    const currentSize = this.cameraManager.frustumSize || 10;
     const newSize = currentSize * factor;
     
     // Apply constraints
     const constrainedSize = Math.max(this.minZoom, Math.min(this.maxZoom, newSize));
     
-    this.cameraManager.setFrustumSize(constrainedSize);
+    if (typeof this.cameraManager.setFrustumSize === 'function') {
+      this.cameraManager.setFrustumSize(constrainedSize);
+      console.log(`Zoom: size ${constrainedSize.toFixed(2)}`);
+    }
   }
 
   /**
    * Pan (move target)
    */
   pan(deltaX, deltaY, viewName = 'front') {
-    if (!this.enablePan) return;
+    if (!this.enablePan || !this.cameraManager) return;
     
-    this.cameraManager.pan(deltaX, deltaY, viewName);
+    if (typeof this.cameraManager.pan === 'function') {
+      this.cameraManager.pan(deltaX, deltaY, viewName);
+      console.log(`Pan: ${deltaX.toFixed(3)}, ${deltaY.toFixed(3)} for ${viewName}`);
+    } else {
+      console.warn('CameraManager.pan method not available');
+    }
   }
 
   /**
@@ -388,7 +498,7 @@ export class Controls {
     // Handle auto-rotation
     if (this.autoRotate) {
       const autoRotateAngle = 2 * Math.PI / 60 / 60 * this.autoRotateSpeed;
-      this.rotate(autoRotateAngle, 0);
+      this.orbit(autoRotateAngle, 0);
     }
     
     // Apply any pending spherical delta changes
@@ -402,7 +512,9 @@ export class Controls {
       this.spherical.phi = Math.max(0.01, Math.min(Math.PI - 0.01, this.spherical.phi));
       
       // Update camera manager
-      this.cameraManager.setDistance(this.spherical.radius);
+      if (this.cameraManager && typeof this.cameraManager.setDistance === 'function') {
+        this.cameraManager.setDistance(this.spherical.radius);
+      }
       
       // Reset delta
       this.sphericalDelta.set(0, 0, 0);
@@ -452,7 +564,7 @@ export class Controls {
    */
   reset() {
     this.autoRotate = false;
-    this.spherical.set(this.cameraManager.distance, Math.PI / 2, 0);
+    this.spherical.set(this.cameraManager?.distance || 10, Math.PI / 2, 0);
     this.sphericalDelta.set(0, 0, 0);
     
     this.mouseState.isDown = false;
@@ -465,13 +577,21 @@ export class Controls {
    * Get current control state
    */
   getState() {
-    return {
-      target: this.cameraManager.target.clone(),
-      distance: this.cameraManager.distance,
-      frustumSize: this.cameraManager.frustumSize,
+    const state = {
       autoRotate: this.autoRotate,
-      enabled: this.isEnabled
+      enabled: this.isEnabled,
+      enableRotate: this.enableRotate,
+      enableZoom: this.enableZoom,
+      enablePan: this.enablePan
     };
+    
+    if (this.cameraManager) {
+      if (this.cameraManager.target) state.target = this.cameraManager.target.clone();
+      if (this.cameraManager.distance) state.distance = this.cameraManager.distance;
+      if (this.cameraManager.frustumSize) state.frustumSize = this.cameraManager.frustumSize;
+    }
+    
+    return state;
   }
 
   /**
@@ -480,29 +600,46 @@ export class Controls {
   setState(state) {
     if (!state) return;
     
-    this.cameraManager.setTarget(state.target);
-    this.cameraManager.setDistance(state.distance);
-    this.cameraManager.setFrustumSize(state.frustumSize);
-    this.autoRotate = state.autoRotate;
-    this.isEnabled = state.enabled;
+    if (this.cameraManager) {
+      if (state.target && typeof this.cameraManager.setTarget === 'function') {
+        this.cameraManager.setTarget(state.target);
+      }
+      if (state.distance && typeof this.cameraManager.setDistance === 'function') {
+        this.cameraManager.setDistance(state.distance);
+      }
+      if (state.frustumSize && typeof this.cameraManager.setFrustumSize === 'function') {
+        this.cameraManager.setFrustumSize(state.frustumSize);
+      }
+    }
+    
+    this.autoRotate = state.autoRotate || false;
+    this.isEnabled = state.enabled !== undefined ? state.enabled : true;
+    this.enableRotate = state.enableRotate !== undefined ? state.enableRotate : true;
+    this.enableZoom = state.enableZoom !== undefined ? state.enableZoom : true;
+    this.enablePan = state.enablePan !== undefined ? state.enablePan : true;
   }
 
   /**
    * Dispose of controls
    */
   dispose() {
-    // Remove event listeners
-    Object.values(this.canvases).forEach(canvas => {
-      canvas.removeEventListener('mousedown', this.onMouseDown);
-      canvas.removeEventListener('mousemove', this.onMouseMove);
-      canvas.removeEventListener('mouseup', this.onMouseUp);
-      canvas.removeEventListener('wheel', this.onMouseWheel);
-      canvas.removeEventListener('touchstart', this.onTouchStart);
-      canvas.removeEventListener('touchmove', this.onTouchMove);
-      canvas.removeEventListener('touchend', this.onTouchEnd);
-      canvas.removeEventListener('contextmenu', (e) => e.preventDefault());
+    // Remove event listeners from each canvas
+    Object.entries(this.canvases).forEach(([viewName, canvas]) => {
+      if (canvas._controlHandlers) {
+        canvas.removeEventListener('mousedown', canvas._controlHandlers.mouseDown);
+        canvas.removeEventListener('mousemove', canvas._controlHandlers.mouseMove);
+        canvas.removeEventListener('mouseup', canvas._controlHandlers.mouseUp);
+        canvas.removeEventListener('wheel', canvas._controlHandlers.wheel);
+        canvas.removeEventListener('touchstart', canvas._controlHandlers.touchStart);
+        canvas.removeEventListener('touchmove', canvas._controlHandlers.touchMove);
+        canvas.removeEventListener('touchend', canvas._controlHandlers.touchEnd);
+        canvas.removeEventListener('contextmenu', canvas._controlHandlers.contextMenu);
+        
+        delete canvas._controlHandlers;
+      }
     });
     
+    // Remove global listeners
     document.removeEventListener('keydown', this.onKeyDown);
     document.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('resize', this.onWindowResize);
@@ -513,8 +650,4 @@ export class Controls {
     
     console.log('🗑️ Controls disposed');
   }
-
-  // Bound methods for event listeners
-  onDocumentMouseMove = (event) => this.onMouseMove(event, 'global');
-  onDocumentMouseUp = (event) => this.onMouseUp(event, 'global');
 }
