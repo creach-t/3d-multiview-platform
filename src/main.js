@@ -166,6 +166,9 @@ class MultiViewPlatform {
     // Image exporter
     this.imageExporter = new ImageExporter(this.renderer, this.cameraManager);
     
+    // Connect scene to image exporter
+    this.imageExporter.setScene(this.scene);
+    
     // Batch processor for multiple exports
     this.batchProcessor = new BatchProcessor(this.imageExporter, this.templates);
   }
@@ -181,12 +184,26 @@ class MultiViewPlatform {
     document.addEventListener('keydown', (e) => this.handleKeyboard(e));
     
     // Export button
-    document.getElementById('export-all').addEventListener('click', () => this.handleExportAll());
+    const exportBtn = document.getElementById('export-all');
+    if (exportBtn) {
+      exportBtn.addEventListener('click', () => this.handleExportAll());
+    }
     
     // Control buttons
-    document.getElementById('reset-camera').addEventListener('click', () => this.resetCamera());
-    document.getElementById('center-model').addEventListener('click', () => this.centerModel());
-    document.getElementById('auto-frame').addEventListener('click', () => this.autoFrame());
+    const resetBtn = document.getElementById('reset-camera');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => this.resetCamera());
+    }
+    
+    const centerBtn = document.getElementById('center-model');
+    if (centerBtn) {
+      centerBtn.addEventListener('click', () => this.centerModel());
+    }
+    
+    const autoFrameBtn = document.getElementById('auto-frame');
+    if (autoFrameBtn) {
+      autoFrameBtn.addEventListener('click', () => this.autoFrame());
+    }
     
     // Individual capture buttons
     document.querySelectorAll('.capture-btn').forEach(btn => {
@@ -212,18 +229,27 @@ class MultiViewPlatform {
     });
     
     // Color picker
-    document.getElementById('custom-color').addEventListener('change', (e) => {
-      this.setCustomBackground(e.target.value);
-    });
+    const colorPicker = document.getElementById('custom-color');
+    if (colorPicker) {
+      colorPicker.addEventListener('change', (e) => {
+        this.setCustomBackground(e.target.value);
+      });
+    }
     
     // Marketplace and quality selectors
-    document.getElementById('marketplace-preset').addEventListener('change', (e) => {
-      this.setMarketplace(e.target.value);
-    });
+    const marketplaceSelect = document.getElementById('marketplace-preset');
+    if (marketplaceSelect) {
+      marketplaceSelect.addEventListener('change', (e) => {
+        this.setMarketplace(e.target.value);
+      });
+    }
     
-    document.getElementById('quality-preset').addEventListener('change', (e) => {
-      this.setQuality(e.target.value);
-    });
+    const qualitySelect = document.getElementById('quality-preset');
+    if (qualitySelect) {
+      qualitySelect.addEventListener('change', (e) => {
+        this.setQuality(e.target.value);
+      });
+    }
   }
 
   /**
@@ -246,7 +272,10 @@ class MultiViewPlatform {
       this.updateModelInfo(model);
       
       // Enable export button
-      document.getElementById('export-all').disabled = false;
+      const exportBtn = document.getElementById('export-all');
+      if (exportBtn) {
+        exportBtn.disabled = false;
+      }
       
       this.hideLoading();
       this.showToast('Modèle chargé avec succès', 'success');
@@ -466,8 +495,11 @@ class MultiViewPlatform {
     
     // Update quality selector if needed
     if (template.recommendedQuality) {
-      document.getElementById('quality-preset').value = template.recommendedQuality;
-      this.setQuality(template.recommendedQuality);
+      const qualitySelect = document.getElementById('quality-preset');
+      if (qualitySelect) {
+        qualitySelect.value = template.recommendedQuality;
+        this.setQuality(template.recommendedQuality);
+      }
     }
     
     // Update background if needed
@@ -480,16 +512,26 @@ class MultiViewPlatform {
    * Capture single view
    */
   async captureView(viewName) {
+    if (!this.currentModel) {
+      this.showToast('Aucun modèle chargé', 'warning');
+      return;
+    }
+
     try {
       const viewport = this.viewports[viewName];
-      viewport.classList.add('capturing');
+      if (viewport) {
+        viewport.classList.add('capturing');
+      }
       
-      const image = await this.imageExporter.captureView(viewName, this.settings);
+      const result = await this.imageExporter.captureView(viewName, this.settings);
       
       // Download the image
-      this.downloadImage(image, `${viewName}_view.png`);
+      this.downloadImage(result.imageData, result.filename || `${viewName}_view.png`);
       
-      viewport.classList.remove('capturing');
+      if (viewport) {
+        viewport.classList.remove('capturing');
+      }
+      
       this.showToast(`Vue ${viewName} capturée`, 'success');
       
     } catch (error) {
@@ -510,14 +552,19 @@ class MultiViewPlatform {
     try {
       this.showLoading('Export en cours...');
       
+      // Get template
       const template = this.templates.getTemplate(this.settings.marketplace);
+      
+      // Export all views
       const results = await this.batchProcessor.exportAll(this.settings, template);
       
-      // Download all images as a ZIP
+      // Download all images
       await this.downloadBatch(results);
       
       this.hideLoading();
-      this.showToast(`${results.length} vues exportées`, 'success');
+      
+      const successCount = results.filter(r => r.success).length;
+      this.showToast(`${successCount} vues exportées`, 'success');
       
     } catch (error) {
       this.hideLoading();
@@ -541,10 +588,15 @@ class MultiViewPlatform {
   updateModelInfo(model) {
     const stats = this.scene.getModelStats(model);
     
-    document.getElementById('poly-count').textContent = stats.triangles.toLocaleString();
-    document.getElementById('vertex-count').textContent = stats.vertices.toLocaleString();
-    document.getElementById('material-count').textContent = stats.materials;
-    document.getElementById('texture-count').textContent = stats.textures;
+    const polyCount = document.getElementById('poly-count');
+    const vertexCount = document.getElementById('vertex-count');
+    const materialCount = document.getElementById('material-count');
+    const textureCount = document.getElementById('texture-count');
+    
+    if (polyCount) polyCount.textContent = stats.triangles.toLocaleString();
+    if (vertexCount) vertexCount.textContent = stats.vertices.toLocaleString();
+    if (materialCount) materialCount.textContent = stats.materials;
+    if (textureCount) textureCount.textContent = stats.textures;
   }
 
   /**
@@ -560,12 +612,18 @@ class MultiViewPlatform {
   }
 
   /**
-   * Download batch of images as ZIP
+   * Download batch of images
    */
   async downloadBatch(results) {
-    // This would require a ZIP library like JSZip
-    // For now, download individually
-    results.forEach((result, index) => {
+    if (!Array.isArray(results)) {
+      console.error('Results is not an array:', results);
+      return;
+    }
+    
+    // Download each successful result
+    const successfulResults = results.filter(result => result.success && result.data);
+    
+    successfulResults.forEach((result, index) => {
       setTimeout(() => {
         this.downloadImage(result.data, result.filename);
       }, index * 100); // Stagger downloads
@@ -579,8 +637,8 @@ class MultiViewPlatform {
     const overlay = document.getElementById('loading-overlay');
     const text = document.getElementById('loading-text');
     
-    text.textContent = message;
-    overlay.classList.remove('hidden');
+    if (text) text.textContent = message;
+    if (overlay) overlay.classList.remove('hidden');
   }
 
   /**
@@ -588,7 +646,7 @@ class MultiViewPlatform {
    */
   hideLoading() {
     const overlay = document.getElementById('loading-overlay');
-    overlay.classList.add('hidden');
+    if (overlay) overlay.classList.add('hidden');
   }
 
   /**
@@ -596,6 +654,8 @@ class MultiViewPlatform {
    */
   showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
+    if (!container) return;
+    
     const toast = document.createElement('div');
     
     toast.className = `toast ${type}`;
