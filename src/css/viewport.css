@@ -1,5 +1,5 @@
 /* ==============================================
-   Viewport Styles - Multi-View Layout
+   Viewport Styles - Multi-View Layout with Correct Aspect Ratios
    ============================================== */
 
 /* Viewport Container */
@@ -31,6 +31,8 @@
   overflow: hidden;
   transition: all var(--transition-fast);
   position: relative;
+  /* Ensure viewports can maintain their natural aspect ratio */
+  min-height: 200px;
 }
 
 .viewport:hover {
@@ -47,6 +49,8 @@
   align-items: center;
   justify-content: space-between;
   min-height: 40px;
+  /* Fixed height to ensure consistent canvas area */
+  flex-shrink: 0;
 }
 
 .view-title {
@@ -120,7 +124,7 @@
   transform: scale(1.05);
 }
 
-/* Viewport Canvas */
+/* Viewport Canvas - CRITICAL for aspect ratio */
 .viewport-canvas {
   flex: 1;
   width: 100%;
@@ -128,6 +132,11 @@
   display: block;
   cursor: grab;
   outline: none;
+  /* IMPORTANT: Let the renderer handle sizing, don't force aspect ratio here */
+  object-fit: contain;
+  /* Ensure the canvas fills its container properly */
+  min-height: 0;
+  min-width: 0;
 }
 
 .viewport-canvas:active {
@@ -201,9 +210,6 @@
   z-index: 5;
 }
 
-/* REMOVED: .viewport:hover .viewport-overlay { opacity: 1; } 
-   This was causing the "capture en cours" overlay to appear on hover */
-
 /* Camera Position Indicator */
 .camera-indicator {
   position: absolute;
@@ -219,11 +225,6 @@
   opacity: 0;
   transition: opacity var(--transition-fast);
 }
-
-/* ALSO DISABLED camera indicator hover to avoid confusion */
-/* .viewport:hover .camera-indicator {
-  opacity: 1;
-} */
 
 /* Grid Lines Overlay (Optional) */
 .viewport.show-grid::before {
@@ -335,6 +336,21 @@
   100% { transform: rotate(360deg); }
 }
 
+/* Aspect Ratio Debug Helper (remove in production) */
+.viewport.debug-aspect::after {
+  content: attr(data-aspect-ratio);
+  position: absolute;
+  bottom: var(--spacing-xs);
+  left: var(--spacing-xs);
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 2px 6px;
+  font-size: 10px;
+  border-radius: 3px;
+  z-index: 20;
+  pointer-events: none;
+}
+
 /* Responsive Viewport Layout */
 @media (max-width: 1200px) {
   .viewport-grid {
@@ -348,6 +364,10 @@
   
   .view-title {
     font-size: var(--font-size-xs);
+  }
+  
+  .viewport {
+    min-height: 180px;
   }
 }
 
@@ -377,6 +397,10 @@
     height: 24px;
     font-size: var(--font-size-xs);
   }
+  
+  .viewport {
+    min-height: 150px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -386,7 +410,7 @@
   }
   
   .viewport {
-    min-height: 150px;
+    min-height: 120px;
   }
 }
 
