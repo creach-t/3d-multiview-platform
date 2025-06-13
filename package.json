@@ -1,0 +1,56 @@
+{
+  "name": "3d-multiview-platform",
+  "version": "1.0.0",
+  "description": "Plateforme de visualisation 3D multi-vues pour préparation de vente en ligne - Export optimisé TurboSquid/CGTrader",
+  "type": "module",
+  "main": "src/main.js",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview",
+    "serve": "vite preview --port 3000",
+    "lint": "eslint src --ext .js",
+    "format": "prettier --write src/**/*.{js,css,html}"
+  },
+  "keywords": [
+    "3d",
+    "three.js",
+    "visualization",
+    "webgl",
+    "marketplace",
+    "turbosquid",
+    "cgtrader",
+    "gltf",
+    "export",
+    "multi-view"
+  ],
+  "author": "CREACH-T",
+  "license": "MIT",
+  "dependencies": {
+    "three": "^0.164.1"
+  },
+  "devDependencies": {
+    "vite": "^5.3.1",
+    "eslint": "^8.57.0",
+    "prettier": "^3.3.2",
+    "@vitejs/plugin-legacy": "^5.4.1"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/creach-t/3d-multiview-platform.git"
+  },
+  "bugs": {
+    "url": "https://github.com/creach-t/3d-multiview-platform/issues"
+  },
+  "homepage": "https://github.com/creach-t/3d-multiview-platform#readme",
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead",
+    "not ie 11"
+  ]
+}
