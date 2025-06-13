@@ -1,5 +1,5 @@
 /* ==============================================
-   Viewport Styles - Multi-View Layout with Fixed Sizes
+   Viewport Styles - Multi-View Layout with Correct Aspect Ratios
    ============================================== */
 
 /* Viewport Container */
@@ -8,23 +8,19 @@
   padding: var(--spacing-lg);
   background-color: var(--bg-secondary);
   overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
-/* Viewport Grid - Fixed sizes based on screen */
+/* Viewport Grid */
 .viewport-grid {
   display: grid;
-  grid-template-columns: repeat(3, 320px); /* Fixed width per viewport */
-  grid-template-rows: repeat(2, 240px);    /* Fixed height per viewport */
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
   gap: var(--spacing-md);
-  /* Center the grid */
-  justify-content: center;
-  align-content: center;
+  height: 100%;
+  width: 100%;
 }
 
-/* Individual Viewport - Fixed dimensions */
+/* Individual Viewport */
 .viewport {
   background-color: var(--bg-primary);
   border: 1px solid var(--border-color);
@@ -35,9 +31,8 @@
   overflow: hidden;
   transition: all var(--transition-fast);
   position: relative;
-  /* Fixed size - no flex growing */
-  width: 320px;
-  height: 240px;
+  /* Ensure viewports can maintain their natural aspect ratio */
+  min-height: 200px;
 }
 
 .viewport:hover {
@@ -53,7 +48,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 40px; /* Fixed header height */
+  min-height: 40px;
+  /* Fixed height to ensure consistent canvas area */
   flex-shrink: 0;
 }
 
@@ -128,16 +124,19 @@
   transform: scale(1.05);
 }
 
-/* Viewport Canvas - Fixed aspect ratio area */
+/* Viewport Canvas - CRITICAL for aspect ratio */
 .viewport-canvas {
-  width: 318px;   /* viewport width - 2px border */
-  height: 198px;  /* viewport height - header height - 2px border */
+  flex: 1;
+  width: 100%;
+  height: 100%;
   display: block;
   cursor: grab;
   outline: none;
+  /* IMPORTANT: Let the renderer handle sizing, don't force aspect ratio here */
   object-fit: contain;
-  /* Ensure the canvas maintains its fixed size */
-  flex-shrink: 0;
+  /* Ensure the canvas fills its container properly */
+  min-height: 0;
+  min-width: 0;
 }
 
 .viewport-canvas:active {
@@ -191,30 +190,57 @@
   text-align: center;
 }
 
-/* Capturing State - Only show animation, no text overlay */
-.viewport.capturing {
-  animation: captureFlash 0.3s ease-out;
+/* Viewport Overlay - DISABLED to prevent "capture en cours" issue */
+.viewport-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-inverse);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+  pointer-events: none;
+  z-index: 5;
 }
 
-/* Add visual feedback for capturing without text overlay */
-.viewport.capturing::before {
+/* Camera Position Indicator */
+.camera-indicator {
+  position: absolute;
+  top: var(--spacing-sm);
+  right: var(--spacing-sm);
+  background-color: rgba(0, 0, 0, 0.7);
+  color: var(--text-inverse);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+/* Grid Lines Overlay (Optional) */
+.viewport.show-grid::before {
   content: "";
   position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 40px;
-  height: 40px;
-  margin: -20px 0 0 -20px;
-  border: 3px solid rgba(99, 102, 241, 0.3);
-  border-top: 3px solid var(--primary-color);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  z-index: 15;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  top: 40px; /* Account for header */
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    linear-gradient(rgba(0, 0, 0, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.1) 1px, transparent 1px);
+  background-size: 20px 20px;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.3;
 }
 
 /* Viewport Specific Styling */
@@ -242,65 +268,124 @@
   border-left: 3px solid #8b5cf6;
 }
 
-/* Responsive Viewport Layout - Different fixed sizes per breakpoint */
-
-/* Large screens (1400px+) - Larger viewports */
-@media (min-width: 1400px) {
-  .viewport-grid {
-    grid-template-columns: repeat(3, 400px);
-    grid-template-rows: repeat(2, 300px);
-  }
-  
-  .viewport {
-    width: 400px;
-    height: 300px;
-  }
-  
-  .viewport-canvas {
-    width: 398px;  /* 400 - 2px border */
-    height: 258px; /* 300 - 40px header - 2px border */
-  }
+/* Viewport Fullscreen Mode */
+.viewport.fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  border-radius: 0;
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
 }
 
-/* Medium-large screens (1200px-1399px) - Standard size */
-@media (min-width: 1200px) and (max-width: 1399px) {
-  .viewport-grid {
-    grid-template-columns: repeat(3, 360px);
-    grid-template-rows: repeat(2, 270px);
-  }
-  
-  .viewport {
-    width: 360px;
-    height: 270px;
-  }
-  
-  .viewport-canvas {
-    width: 358px;  /* 360 - 2px border */
-    height: 228px; /* 270 - 40px header - 2px border */
-  }
+.viewport.fullscreen .viewport-header {
+  padding: var(--spacing-md) var(--spacing-lg);
 }
 
-/* Medium screens (768px-1199px) - Smaller viewports */
-@media (min-width: 768px) and (max-width: 1199px) {
+.viewport.fullscreen .view-title {
+  font-size: var(--font-size-lg);
+}
+
+/* Export Preview Mode */
+.viewport.export-preview {
+  position: relative;
+  overflow: visible;
+}
+
+.viewport.export-preview::after {
+  content: "📸 Mode Export";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background-color: var(--success-color);
+  color: var(--text-inverse);
+  padding: var(--spacing-xs);
+  text-align: center;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  z-index: 20;
+}
+
+/* Capturing State - Only show animation, no text overlay */
+.viewport.capturing {
+  animation: captureFlash 0.3s ease-out;
+}
+
+/* Add visual feedback for capturing without text overlay */
+.viewport.capturing::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  border: 3px solid rgba(99, 102, 241, 0.3);
+  border-top: 3px solid var(--primary-color);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  z-index: 15;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Aspect Ratio Debug Helper (remove in production) */
+.viewport.debug-aspect::after {
+  content: attr(data-aspect-ratio);
+  position: absolute;
+  bottom: var(--spacing-xs);
+  left: var(--spacing-xs);
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 2px 6px;
+  font-size: 10px;
+  border-radius: 3px;
+  z-index: 20;
+  pointer-events: none;
+}
+
+/* Responsive Viewport Layout */
+@media (max-width: 1200px) {
   .viewport-grid {
-    grid-template-columns: repeat(3, 280px);
-    grid-template-rows: repeat(2, 210px);
     gap: var(--spacing-sm);
-  }
-  
-  .viewport {
-    width: 280px;
-    height: 210px;
-  }
-  
-  .viewport-canvas {
-    width: 278px;  /* 280 - 2px border */
-    height: 168px; /* 210 - 40px header - 2px border */
   }
   
   .viewport-header {
     padding: var(--spacing-xs) var(--spacing-sm);
-    height: 36px;
+    min-height: 36px;
+  }
+  
+  .view-title {
+    font-size: var(--font-size-xs);
+  }
+  
+  .viewport {
+    min-height: 180px;
+  }
+}
+
+@media (max-width: 768px) {
+  .viewport-container {
+    flex: 1;
+    height: calc(100vh - var(--header-height) - 200px);
+  }
+  
+  .viewport-grid {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
+    gap: var(--spacing-xs);
+  }
+  
+  .viewport-header {
+    padding: var(--spacing-xs);
+    min-height: 32px;
   }
   
   .view-title {
@@ -312,79 +397,20 @@
     height: 24px;
     font-size: var(--font-size-xs);
   }
-}
-
-/* Small screens (481px-767px) - 2 columns */
-@media (min-width: 481px) and (max-width: 767px) {
-  .viewport-grid {
-    grid-template-columns: repeat(2, 240px);
-    grid-template-rows: repeat(3, 180px);
-    gap: var(--spacing-xs);
-  }
   
   .viewport {
-    width: 240px;
-    height: 180px;
-  }
-  
-  .viewport-canvas {
-    width: 238px;  /* 240 - 2px border */
-    height: 138px; /* 180 - 40px header - 2px border */
-  }
-  
-  .viewport-header {
-    padding: var(--spacing-xs);
-    height: 32px;
-  }
-  
-  .view-title {
-    font-size: var(--font-size-xs);
-  }
-  
-  .capture-btn {
-    width: 20px;
-    height: 20px;
-    font-size: 10px;
+    min-height: 150px;
   }
 }
 
-/* Extra small screens (480px and below) - Single column */
 @media (max-width: 480px) {
-  .viewport-container {
-    padding: var(--spacing-sm);
-  }
-  
   .viewport-grid {
-    grid-template-columns: 280px;
-    grid-template-rows: repeat(6, 160px);
-    gap: var(--spacing-xs);
-    max-height: calc(100vh - 200px);
-    overflow-y: auto;
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(6, 1fr);
   }
   
   .viewport {
-    width: 280px;
-    height: 160px;
-  }
-  
-  .viewport-canvas {
-    width: 278px;  /* 280 - 2px border */
-    height: 118px; /* 160 - 40px header - 2px border */
-  }
-  
-  .viewport-header {
-    padding: var(--spacing-xs);
-    height: 32px;
-  }
-  
-  .view-title {
-    font-size: var(--font-size-xs);
-  }
-  
-  .capture-btn {
-    width: 18px;
-    height: 18px;
-    font-size: 10px;
+    min-height: 120px;
   }
 }
 
@@ -395,14 +421,11 @@
   }
   
   .viewport-grid {
-    grid-template-columns: repeat(3, 6cm);
-    grid-template-rows: repeat(2, 4.5cm);
-    gap: 0.5cm;
+    gap: 0;
+    border: 1px solid #000;
   }
   
   .viewport {
-    width: 6cm;
-    height: 4.5cm;
     border: 1px solid #000;
     border-radius: 0;
     box-shadow: none;
@@ -412,12 +435,6 @@
   .viewport-header {
     background-color: #f0f0f0;
     border-bottom: 1px solid #000;
-    height: 1cm;
-  }
-  
-  .viewport-canvas {
-    width: calc(6cm - 2px);
-    height: calc(3.5cm - 2px);
   }
   
   .view-controls {
@@ -433,7 +450,7 @@
   }
 }
 
-/* Dark Mode Support */
+/* Dark Mode Support (Optional) */
 @media (prefers-color-scheme: dark) {
   .viewport {
     background-color: #1f2937;
@@ -453,6 +470,10 @@
     background-color: #374151;
     border-color: #4b5563;
     color: #d1d5db;
+  }
+  
+  .camera-indicator {
+    background-color: rgba(0, 0, 0, 0.9);
   }
 }
 
@@ -477,19 +498,4 @@
   0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7); }
   50% { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0.3); }
   100% { box-shadow: 0 0 0 20px rgba(99, 102, 241, 0); }
-}
-
-/* Debug info for checking sizes */
-.viewport.debug-size::after {
-  content: attr(data-canvas-size);
-  position: absolute;
-  bottom: 2px;
-  right: 2px;
-  background-color: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 2px 4px;
-  font-size: 10px;
-  border-radius: 2px;
-  z-index: 20;
-  pointer-events: none;
 }
