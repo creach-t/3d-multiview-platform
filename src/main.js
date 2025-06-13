@@ -51,6 +51,9 @@ class MultiViewPlatform {
     this.viewports = {};
     this.canvases = {};
     
+    // State tracking
+    this.captureStates = new Set(); // Track which viewports are capturing
+    
     this.init();
   }
 
@@ -171,6 +174,17 @@ class MultiViewPlatform {
     
     // Batch processor for multiple exports
     this.batchProcessor = new BatchProcessor(this.imageExporter, this.templates);
+    
+    // Setup progress callbacks
+    this.batchProcessor.onProgress((data) => {
+      console.log('Export progress:', data);
+      // You can update UI progress here
+    });
+    
+    this.batchProcessor.onError((data) => {
+      console.error('Export error:', data);
+      this.showToast(`Erreur export ${data.viewName}: ${data.error}`, 'error');
+    });
   }
 
   /**
@@ -517,8 +531,16 @@ class MultiViewPlatform {
       return;
     }
 
+    // Prevent multiple simultaneous captures of same view
+    if (this.captureStates.has(viewName)) {
+      console.log(`Already capturing ${viewName}, skipping...`);
+      return;
+    }
+
+    this.captureStates.add(viewName);
+    const viewport = this.viewports[viewName];
+
     try {
-      const viewport = this.viewports[viewName];
       if (viewport) {
         viewport.classList.add('capturing');
       }
@@ -528,15 +550,17 @@ class MultiViewPlatform {
       // Download the image
       this.downloadImage(result.imageData, result.filename || `${viewName}_view.png`);
       
-      if (viewport) {
-        viewport.classList.remove('capturing');
-      }
-      
       this.showToast(`Vue ${viewName} capturée`, 'success');
       
     } catch (error) {
       console.error('Error capturing view:', error);
       this.showToast('Erreur lors de la capture', 'error');
+    } finally {
+      // Always cleanup
+      this.captureStates.delete(viewName);
+      if (viewport) {
+        viewport.classList.remove('capturing');
+      }
     }
   }
 
@@ -549,6 +573,12 @@ class MultiViewPlatform {
       return;
     }
     
+    // Check if already processing
+    if (this.batchProcessor.isProcessing) {
+      this.showToast('Export déjà en cours...', 'warning');
+      return;
+    }
+    
     try {
       this.showLoading('Export en cours...');
       
@@ -558,18 +588,33 @@ class MultiViewPlatform {
       // Export all views
       const results = await this.batchProcessor.exportAll(this.settings, template);
       
+      this.hideLoading();
+      
+      // Validate results
+      if (!Array.isArray(results)) {
+        throw new Error('Invalid results format from batch processor');
+      }
+      
+      if (results.length === 0) {
+        throw new Error('No results returned from export');
+      }
+      
       // Download all images
       await this.downloadBatch(results);
       
-      this.hideLoading();
+      const successCount = results.filter(r => r && r.success).length;
+      const totalCount = results.length;
       
-      const successCount = results.filter(r => r.success).length;
-      this.showToast(`${successCount} vues exportées`, 'success');
+      if (successCount > 0) {
+        this.showToast(`${successCount}/${totalCount} vues exportées`, 'success');
+      } else {
+        this.showToast('Aucune vue exportée avec succès', 'error');
+      }
       
     } catch (error) {
       this.hideLoading();
       console.error('Error exporting:', error);
-      this.showToast('Erreur lors de l\'export', 'error');
+      this.showToast(`Erreur export: ${error.message}`, 'error');
     }
   }
 
@@ -603,12 +648,22 @@ class MultiViewPlatform {
    * Download single image
    */
   downloadImage(imageData, filename) {
-    const link = document.createElement('a');
-    link.download = filename;
-    link.href = imageData;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    if (!imageData || typeof imageData !== 'string') {
+      console.error('Invalid image data for download');
+      return;
+    }
+    
+    try {
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = imageData;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error downloading image:', error);
+      this.showToast('Erreur lors du téléchargement', 'error');
+    }
   }
 
   /**
@@ -617,17 +672,45 @@ class MultiViewPlatform {
   async downloadBatch(results) {
     if (!Array.isArray(results)) {
       console.error('Results is not an array:', results);
+      this.showToast('Format de résultats invalide', 'error');
       return;
     }
     
-    // Download each successful result
-    const successfulResults = results.filter(result => result.success && result.data);
+    if (results.length === 0) {
+      console.warn('No results to download');
+      this.showToast('Aucun résultat à télécharger', 'warning');
+      return;
+    }
     
+    // Filter successful results with valid data
+    const successfulResults = results.filter(result => 
+      result && 
+      result.success && 
+      result.data && 
+      typeof result.data === 'string' &&
+      result.filename
+    );
+    
+    if (successfulResults.length === 0) {
+      console.warn('No successful results with valid data');
+      this.showToast('Aucun fichier valide à télécharger', 'warning');
+      return;
+    }
+    
+    console.log(`Downloading ${successfulResults.length} files...`);
+    
+    // Download each successful result with staggered timing
     successfulResults.forEach((result, index) => {
       setTimeout(() => {
-        this.downloadImage(result.data, result.filename);
-      }, index * 100); // Stagger downloads
+        try {
+          this.downloadImage(result.data, result.filename);
+        } catch (error) {
+          console.error(`Error downloading ${result.filename}:`, error);
+        }
+      }, index * 200); // 200ms delay between downloads
     });
+    
+    this.showToast(`Téléchargement de ${successfulResults.length} fichiers...`, 'info');
   }
 
   /**
@@ -685,6 +768,21 @@ class MultiViewPlatform {
       info: 'ℹ️'
     };
     return icons[type] || icons.info;
+  }
+
+  /**
+   * Cleanup and dispose resources
+   */
+  dispose() {
+    if (this.batchProcessor) {
+      this.batchProcessor.dispose();
+    }
+    if (this.controls) {
+      this.controls.dispose();
+    }
+    if (this.renderer) {
+      this.renderer.dispose();
+    }
   }
 }
 
