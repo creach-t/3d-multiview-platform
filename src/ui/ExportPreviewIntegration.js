@@ -1,6 +1,5 @@
 /**
- * ExportPreviewIntegration.js - UI Integration for Export Preview Mode
- * FIXED: Force ratio 1920/1080 = 1.778 et debug détaillé
+ * ExportPreviewIntegration.js - Ajout force directe JavaScript
  */
 
 import { ViewportRatioManager } from './ViewportRatioManager.js';
@@ -22,16 +21,10 @@ export class ExportPreviewIntegration {
   init() {
     this.createUI();
     this.bindEvents();
-    
-    // Debug button
     this.addDebugButton();
-    
     console.log('🎯 Export Preview Integration initialized');
   }
 
-  /**
-   * AJOUT: Bouton debug pour voir l'état
-   */
   addDebugButton() {
     this.debugBtn = this.createElement('button', {
       textContent: '🔍 Debug',
@@ -53,37 +46,30 @@ export class ExportPreviewIntegration {
     this.debugBtn.addEventListener('click', () => this.debugViewports());
   }
 
-  /**
-   * Debug détaillé des viewports
-   */
   debugViewports() {
     console.log('🔍 === DEBUG VIEWPORTS ===');
     
-    // Détecter éléments
-    this.viewportRatioManager.debugFoundElements();
+    const FORCED_RATIO = 1920 / 1080;
+    console.log(`Target ratio: ${FORCED_RATIO.toFixed(3)}`);
     
-    // Ratio actuel
-    console.log(`Current CSS ratio: ${this.viewportRatioManager.getCurrentRatio()}`);
+    // Lister tous les éléments trouvés
+    const canvases = document.querySelectorAll('canvas');
+    console.log(`Found ${canvases.length} canvas elements:`);
     
-    // Preset actuel
-    const preset = this.cameraManager.exportPresets[this.currentExportPreset];
-    console.log(`Export preset: ${this.currentExportPreset}`, preset);
-    
-    // Calculer le bon ratio
-    const correctRatio = 1920 / 1080;
-    console.log(`Correct ratio should be: ${correctRatio.toFixed(3)}`);
-    
-    // État des caméras
-    Object.keys(this.cameraManager.cameras).forEach(view => {
-      const camera = this.cameraManager.cameras[view];
-      const aspect = camera.userData.aspect || this.cameraManager.aspectRatio;
-      console.log(`${view} camera aspect: ${aspect.toFixed(3)}`);
+    canvases.forEach((canvas, i) => {
+      const rect = canvas.getBoundingClientRect();
+      const parent = canvas.parentElement;
+      const currentRatio = rect.width / rect.height;
+      
+      console.log(`Canvas ${i}:`, {
+        size: `${rect.width.toFixed(0)}x${rect.height.toFixed(0)}`,
+        ratio: currentRatio.toFixed(3),
+        parent: parent?.tagName,
+        parentClass: parent?.className
+      });
     });
   }
 
-  /**
-   * Create UI controls
-   */
   createUI() {
     this.previewBtn = this.createElement('button', {
       id: 'export-preview-btn',
@@ -143,46 +129,90 @@ export class ExportPreviewIntegration {
   }
 
   /**
-   * FIXÉ: Force ratio 1920/1080 = 1.778
+   * MODIFIÉ: Force avec CSS + JavaScript direct
    */
   enableExportPreview() {
     this.exportPreviewActive = true;
     
-    // FORCER le ratio 1920/1080
-    const EXPORT_RATIO = 1920 / 1080; // = 1.777...
+    const EXPORT_RATIO = 1920 / 1080;
     
-    console.log(`🎯 Forcing export ratio: ${EXPORT_RATIO.toFixed(3)}`);
+    console.log(`🎯 Forcing export ratio: ${EXPORT_RATIO.toFixed(3)} with dual approach`);
     
-    // 1. FORCER ratios CSS des viewports
+    // 1. CSS agressif
     this.viewportRatioManager.setExportRatio(EXPORT_RATIO);
     
-    // 2. FORCER caméras au même ratio
+    // 2. AJOUT: Force directe JavaScript
+    this.forceRatioDirectly(EXPORT_RATIO);
+    
+    // 3. Caméras
     this.cameraManager.enableExportPreview(this.currentExportPreset);
     this.cameraManager.forceUniformAspectRatio(EXPORT_RATIO);
     
-    // 3. Sync exporter
+    // 4. Exporter
     this.imageExporter.enableViewportSync(this.currentExportPreset);
     
-    // 4. Update UI
+    // 5. UI
     this.updateUI(true);
     this.showPreviewInfo();
     this.updateViewportIndicators();
     
-    // 5. Debug après activation
+    // 6. Re-force après un délai
     setTimeout(() => {
+      this.forceRatioDirectly(EXPORT_RATIO);
       this.debugViewports();
       if (this.app.renderAllViews) {
         this.app.renderAllViews();
       }
     }, 100);
     
-    console.log(`🎯 Export Preview enabled with forced ratio: ${EXPORT_RATIO.toFixed(3)}`);
+    console.log(`🎯 Export Preview enabled with dual force`);
+  }
+
+  /**
+   * NOUVEAU: Force directement via JavaScript
+   */
+  forceRatioDirectly(ratio) {
+    // Trouver tous les éléments canvas et leurs parents
+    const canvases = document.querySelectorAll('canvas');
+    
+    canvases.forEach(canvas => {
+      // Force sur le canvas
+      canvas.style.setProperty('aspect-ratio', ratio.toString(), 'important');
+      canvas.style.setProperty('width', '100%', 'important');
+      canvas.style.setProperty('height', '100%', 'important');
+      
+      // Force sur le parent direct
+      const parent = canvas.parentElement;
+      if (parent) {
+        parent.style.setProperty('aspect-ratio', ratio.toString(), 'important');
+        parent.style.setProperty('width', '100%', 'important');
+        parent.style.setProperty('height', 'auto', 'important');
+        parent.style.setProperty('max-height', 'none', 'important');
+        parent.style.setProperty('flex', 'none', 'important');
+        
+        // Force sur le grand-parent si c'est un grid
+        const grandParent = parent.parentElement;
+        if (grandParent && grandParent.style.display === 'grid') {
+          grandParent.style.setProperty('grid-template-rows', 'none', 'important');
+          grandParent.style.setProperty('grid-auto-rows', 'auto', 'important');
+        }
+      }
+    });
+    
+    // Force sur tous les éléments avec "viewport" dans la classe
+    document.querySelectorAll('[class*="viewport"]').forEach(el => {
+      el.style.setProperty('aspect-ratio', ratio.toString(), 'important');
+      el.style.setProperty('height', 'auto', 'important');
+    });
+    
+    console.log(`🔨 JavaScript force applied to ${canvases.length} canvas elements`);
   }
 
   disableExportPreview() {
     this.exportPreviewActive = false;
     
     this.viewportRatioManager.removeFixedRatio();
+    this.removeDirectForce();
     this.cameraManager.disableExportPreview();
     this.imageExporter.disableViewportSync();
     
@@ -199,13 +229,35 @@ export class ExportPreviewIntegration {
     console.log('👁️ Export Preview disabled');
   }
 
+  /**
+   * NOUVEAU: Enlève la force JavaScript
+   */
+  removeDirectForce() {
+    document.querySelectorAll('canvas').forEach(canvas => {
+      canvas.style.removeProperty('aspect-ratio');
+      const parent = canvas.parentElement;
+      if (parent) {
+        parent.style.removeProperty('aspect-ratio');
+        parent.style.removeProperty('height');
+        parent.style.removeProperty('flex');
+      }
+    });
+    
+    document.querySelectorAll('[class*="viewport"]').forEach(el => {
+      el.style.removeProperty('aspect-ratio');
+      el.style.removeProperty('height');
+    });
+    
+    console.log('🗑️ Direct JavaScript force removed');
+  }
+
   changePreset(presetName) {
     this.currentExportPreset = presetName;
     
     if (this.exportPreviewActive) {
-      // Toujours forcer 1920/1080 peu importe le preset
       const EXPORT_RATIO = 1920 / 1080;
       this.viewportRatioManager.setExportRatio(EXPORT_RATIO);
+      this.forceRatioDirectly(EXPORT_RATIO);
       this.enableExportPreview();
     }
   }
@@ -246,15 +298,14 @@ export class ExportPreviewIntegration {
         <div>Preset: <strong>${this.currentExportPreset}</strong></div>
         <div>Target: <strong>1920×1080</strong></div>
         <div>Forced Ratio: <strong>${FORCED_RATIO.toFixed(3)}:1</strong></div>
-        <div>CSS Ratio: <strong>${cssRatio?.toFixed(3) || 'N/A'}:1</strong></div>
+        <div>CSS + JS Force: <strong>ACTIVE</strong></div>
         <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #444; font-size: 11px; opacity: 0.8;">
-          All viewports forced to 1920/1080 ratio<br>
+          Dual override: CSS + JavaScript<br>
           <button onclick="window.exportPreview?.debugViewports()" style="background:#FF9800;color:white;border:none;padding:2px 4px;border-radius:2px;cursor:pointer;">Debug</button>
         </div>
       `
     });
     
-    // Exposer pour debug
     window.exportPreview = this;
   }
 
@@ -314,7 +365,7 @@ export class ExportPreviewIntegration {
 
     const isMatching = this.viewportRatioManager.isFixedRatioActive();
     
-    overlay.textContent = isMatching ? '1920:1080 ✓' : 'ADAPTIVE';
+    overlay.textContent = isMatching ? 'FORCED ✓' : 'ADAPTIVE';
     overlay.style.background = isMatching ? 
       'rgba(0, 255, 0, 0.9)' : 'rgba(255, 165, 0, 0.9)';
     
