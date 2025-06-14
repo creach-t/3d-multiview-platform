@@ -1,6 +1,7 @@
 /**
  * ImageExporter.js - High-Resolution Image Export System
  * Handles capturing and exporting viewport images with correct aspect ratios
+ * ADDED: Viewport sync for export preview coordination
  */
 
 import * as THREE from 'three';
@@ -10,6 +11,10 @@ export class ImageExporter {
     this.renderer = renderer;
     this.cameraManager = cameraManager;
     this.scene = null; // Will be set from outside
+    
+    // ADDED: Viewport synchronization
+    this.syncWithViewport = true;
+    this.previewMode = false;
     
     // Export settings
     this.exportSettings = {
@@ -49,7 +54,33 @@ export class ImageExporter {
   }
 
   /**
-   * Capture single viewport at high resolution with correct aspect ratio
+   * ADDED: Enable viewport synchronization
+   */
+  enableViewportSync(presetName = 'turbosquid_product') {
+    this.syncWithViewport = true;
+    this.previewMode = true;
+    
+    this.cameraManager.enableExportPreview(presetName);
+    
+    const preset = this.resolutionPresets[presetName];
+    if (preset) {
+      console.log(`🔄 Viewport sync enabled: ${presetName} (${preset.width}x${preset.height})`);
+    }
+  }
+
+  /**
+   * ADDED: Disable viewport synchronization
+   */
+  disableViewportSync() {
+    this.syncWithViewport = false;
+    this.previewMode = false;
+    
+    this.cameraManager.disableExportPreview();
+    console.log('👁️ Viewport sync disabled');
+  }
+
+  /**
+   * MODIFIED: Capture with viewport synchronization
    */
   async captureView(viewName, options = {}) {
     if (!this.scene) {
@@ -64,7 +95,11 @@ export class ImageExporter {
     // Prepare export settings
     const exportOptions = this.prepareExportOptions(viewName, options);
     
-    // Get the current canvas
+    // ADDED: Sync views with export if enabled
+    if (this.syncWithViewport) {
+      this.cameraManager.syncWithExportSettings(exportOptions);
+    }
+    
     const canvas = this.renderer.canvases[viewName];
     if (!canvas) {
       throw new Error(`Canvas not found for view: ${viewName}`);
@@ -73,10 +108,8 @@ export class ImageExporter {
     let imageData;
     
     if (exportOptions.highResolution) {
-      // High-resolution export using off-screen rendering
       imageData = await this.captureHighResolution(viewName, camera, exportOptions);
     } else {
-      // Simple capture from current canvas with aspect ratio correction
       imageData = await this.captureCurrentResolution(viewName, camera, exportOptions);
     }
     
@@ -86,27 +119,34 @@ export class ImageExporter {
       resolution: exportOptions.resolution,
       format: exportOptions.format,
       timestamp: new Date().toISOString(),
-      filename: this.generateFilename(viewName, exportOptions)
+      filename: this.generateFilename(viewName, exportOptions),
+      syncedWithViewport: this.syncWithViewport
     };
   }
 
   /**
-   * Capture at current resolution with aspect ratio maintained
+   * MODIFIED: Capture with sync consideration
    */
   async captureCurrentResolution(viewName, camera, options) {
     const canvas = this.renderer.canvases[viewName];
     
-    // Get current canvas size and aspect ratio
-    const canvasSize = this.renderer.getCanvasSize(viewName);
-    if (!canvasSize) {
-      // Fallback to direct canvas capture
+    // If synced, camera already has correct aspect ratio
+    if (this.syncWithViewport) {
+      this.renderer.renderSingle(viewName, this.scene, camera, {
+        background: options.background
+      });
+      
       return canvas.toDataURL(options.format, options.quality);
     }
     
-    // Ensure camera has correct aspect ratio
+    // Original logic for non-synced mode
+    const canvasSize = this.renderer.getCanvasSize(viewName);
+    if (!canvasSize) {
+      return canvas.toDataURL(options.format, options.quality);
+    }
+    
     this.updateCameraAspectRatio(camera, canvasSize.aspectRatio);
     
-    // Re-render with correct aspect ratio
     this.renderer.renderSingle(viewName, this.scene, camera, {
       background: options.background
     });
@@ -235,16 +275,32 @@ export class ImageExporter {
   }
 
   /**
-   * Prepare export options with defaults and aspect ratio handling
+   * MODIFIED: Export options with sync consideration
    */
   prepareExportOptions(viewName, options) {
-    // Get current canvas size for aspect ratio reference
-    const canvasSize = this.renderer.getCanvasSize(viewName);
+    let canvasSize = null;
+    
+    // In sync mode, use export bounds as reference
+    if (this.syncWithViewport && this.cameraManager.exportPreviewMode) {
+      const bounds = this.cameraManager.getExportPreviewBounds();
+      if (bounds) {
+        canvasSize = {
+          width: Math.floor(bounds.width * 100),
+          height: Math.floor(bounds.height * 100),
+          aspectRatio: bounds.aspect,
+          renderWidth: Math.floor(bounds.width * 100),
+          renderHeight: Math.floor(bounds.height * 100)
+        };
+      }
+    } else {
+      canvasSize = this.renderer.getCanvasSize(viewName);
+    }
+    
     const currentAspect = canvasSize ? canvasSize.aspectRatio : 1.0;
     
     const defaults = {
       resolution: canvasSize ? {
-        width: Math.floor(canvasSize.width * 2), // 2x current size
+        width: Math.floor(canvasSize.width * 2),
         height: Math.floor(canvasSize.height * 2)
       } : this.resolutionPresets.turbosquid_product,
       format: 'image/png',
@@ -264,8 +320,21 @@ export class ImageExporter {
       exportOptions.resolution = this.resolutionPresets[exportOptions.resolution] || defaults.resolution;
     }
     
-    // Ensure resolution maintains aspect ratio if not explicitly set
-    if (options.maintainAspectRatio !== false && canvasSize) {
+    // ADDED: Sync mode maintains export aspect ratio
+    if (this.syncWithViewport && this.cameraManager.exportAspectRatio) {
+      const exportAspect = this.cameraManager.exportAspectRatio;
+      const targetWidth = exportOptions.resolution.width;
+      const targetHeight = Math.floor(targetWidth / exportAspect);
+      
+      exportOptions.resolution = {
+        width: targetWidth,
+        height: targetHeight
+      };
+      
+      console.log(`🎯 Export synced: ${targetWidth}x${targetHeight} (${exportAspect.toFixed(2)}:1)`);
+    }
+    // Original aspect ratio maintenance
+    else if (options.maintainAspectRatio !== false && canvasSize) {
       const targetWidth = exportOptions.resolution.width;
       const targetHeight = Math.floor(targetWidth / currentAspect);
       
@@ -274,7 +343,7 @@ export class ImageExporter {
         height: targetHeight
       };
       
-      console.log(`📐 Maintaining aspect ratio ${currentAspect.toFixed(2)} for ${viewName}: ${targetWidth}x${targetHeight}`);
+      console.log(`📐 Aspect maintained: ${targetWidth}x${targetHeight} (${currentAspect.toFixed(2)}:1)`);
     }
     
     // Resolve background
@@ -285,10 +354,80 @@ export class ImageExporter {
     // Determine if high-resolution export is needed
     if (canvasSize) {
       const scaleFactor = exportOptions.resolution.width / canvasSize.renderWidth;
-      exportOptions.highResolution = scaleFactor > 1.5; // Use high-res for significant upscaling
+      exportOptions.highResolution = scaleFactor > 1.5;
     }
     
     return exportOptions;
+  }
+
+  /**
+   * ADDED: Capture with exact preview guarantee
+   */
+  async captureViewWithExactPreview(viewName, options = {}) {
+    const wasSync = this.syncWithViewport;
+    
+    if (!wasSync) {
+      this.enableViewportSync(options.preset || 'turbosquid_product');
+    }
+    
+    try {
+      const result = await this.captureView(viewName, options);
+      return {
+        ...result,
+        isExactPreview: true
+      };
+    } finally {
+      if (!wasSync) {
+        this.disableViewportSync();
+      }
+    }
+  }
+
+  /**
+   * ADDED: Get sync information
+   */
+  getSyncInfo() {
+    return {
+      syncWithViewport: this.syncWithViewport,
+      previewMode: this.previewMode,
+      cameraPreview: this.cameraManager.getExportPreviewInfo(),
+      availablePresets: Object.keys(this.resolutionPresets)
+    };
+  }
+
+  /**
+   * ADDED: Check if view matches export
+   */
+  isViewMatchingExport(viewName) {
+    if (!this.syncWithViewport) return false;
+    
+    const bounds = this.cameraManager.getExportPreviewBounds();
+    const canvasSize = this.renderer.getCanvasSize(viewName);
+    
+    if (!bounds || !canvasSize) return false;
+    
+    const viewAspect = canvasSize.aspectRatio;
+    const exportAspect = bounds.aspect;
+    
+    return Math.abs(viewAspect - exportAspect) < 0.01;
+  }
+
+  /**
+   * ADDED: Get view/export difference
+   */
+  getViewExportDifference(viewName) {
+    const canvasSize = this.renderer.getCanvasSize(viewName);
+    const bounds = this.cameraManager.getExportPreviewBounds();
+    
+    if (!canvasSize || !bounds) return null;
+    
+    return {
+      viewAspect: canvasSize.aspectRatio,
+      exportAspect: bounds.aspect,
+      aspectDifference: Math.abs(canvasSize.aspectRatio - bounds.aspect),
+      cropFactor: this.cameraManager.getViewportCropFactor(canvasSize),
+      isMatching: this.isViewMatchingExport(viewName)
+    };
   }
 
   /**
@@ -333,7 +472,7 @@ export class ImageExporter {
     const wireframeOptions = {
       ...options,
       wireframe: true,
-      background: this.backgroundPresets.white, // Better contrast for wireframe
+      background: this.backgroundPresets.white,
       shadows: false
     };
     
@@ -351,8 +490,6 @@ export class ImageExporter {
     
     const results = [];
     
-    // For now, just capture the current view multiple times
-    // In a full implementation, this would rotate the camera
     for (let frame = 0; frame < frames; frame++) {
       const frameOptions = {
         ...options,
@@ -366,7 +503,6 @@ export class ImageExporter {
         angle: (frame / frames) * 360
       });
       
-      // Small delay between frames
       await this.delay(50);
     }
     
@@ -378,7 +514,7 @@ export class ImageExporter {
    */
   async createContactSheet(options = {}) {
     const {
-      resolution = { width: 3840, height: 2560 }, // 3:2 ratio
+      resolution = { width: 3840, height: 2560 },
       cols = 3,
       rows = 2,
       padding = 20,
@@ -386,29 +522,24 @@ export class ImageExporter {
       labels = true
     } = options;
     
-    // Calculate individual view size maintaining aspect ratio
     const viewWidth = Math.floor((resolution.width - padding * (cols + 1)) / cols);
     const viewHeight = Math.floor((resolution.height - padding * (rows + 1)) / rows);
     
-    // Capture all views at calculated size
     const views = await this.captureAllViews({
       resolution: { width: viewWidth, height: viewHeight },
       maintainAspectRatio: true,
       ...options
     });
     
-    // Create contact sheet canvas
     const canvas = document.createElement('canvas');
     canvas.width = resolution.width;
     canvas.height = resolution.height;
     
     const ctx = canvas.getContext('2d');
     
-    // Fill background
     ctx.fillStyle = background;
     ctx.fillRect(0, 0, resolution.width, resolution.height);
     
-    // Draw each view
     const viewNames = ['front', 'back', 'left', 'right', 'top', 'bottom'];
     
     for (let i = 0; i < viewNames.length; i++) {
@@ -421,17 +552,14 @@ export class ImageExporter {
       const x = padding + col * (viewWidth + padding);
       const y = padding + row * (viewHeight + padding);
       
-      // Create image element
       const img = new Image();
       await new Promise((resolve) => {
         img.onload = resolve;
         img.src = view.imageData;
       });
       
-      // Draw image maintaining aspect ratio
       ctx.drawImage(img, x, y, viewWidth, viewHeight);
       
-      // Draw label if enabled
       if (labels) {
         ctx.fillStyle = '#000000';
         ctx.font = '24px Arial';

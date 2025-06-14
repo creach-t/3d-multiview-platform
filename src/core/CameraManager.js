@@ -2,6 +2,7 @@
  * CameraManager.js - Multi-Camera Management for 6 Orthographic Views
  * Manages Front, Back, Left, Right, Top, Bottom cameras with synchronized controls
  * FIXED: Proper orientation handling for all views
+ * ADDED: Export Preview Mode for view/export synchronization
  */
 
 import * as THREE from 'three';
@@ -44,6 +45,21 @@ export class CameraManager {
     };
 
     this.aspectRatio = 1; // Will be updated per viewport
+
+    // ADDED: Export Preview Mode
+    this.exportPreviewMode = false;
+    this.exportAspectRatio = null;
+    this.exportPreset = null;
+    
+    // Export presets with correct aspect ratios
+    this.exportPresets = {
+      turbosquid_search: { width: 1920, height: 1920, aspect: 1.0 },
+      turbosquid_product: { width: 1920, height: 1080, aspect: 16/9 },
+      cgtrader_main: { width: 1920, height: 1440, aspect: 4/3 },
+      square: { width: 2048, height: 2048, aspect: 1.0 },
+      ultra_hd: { width: 3840, height: 2160, aspect: 16/9 },
+      print_ready: { width: 7680, height: 4320, aspect: 16/9 }
+    };
 
     this.initCameras();
   }
@@ -162,17 +178,22 @@ export class CameraManager {
   }
 
   /**
-   * FIXED: Robust aspect ratio handling with fallback to global aspect
+   * MODIFIED: Aspect ratio handling respects export preview mode
    */
   updateAspectRatios(viewportSizes = {}) {
-    // First, determine if we have valid viewport sizes
+    // If in export preview mode, ignore viewport sizes and use export aspect
+    if (this.exportPreviewMode && this.exportAspectRatio) {
+      this.forceUniformAspectRatio(this.exportAspectRatio);
+      return;
+    }
+
+    // Original logic for normal mode
     const hasValidSizes =
       Object.keys(viewportSizes).length > 0 &&
       Object.values(viewportSizes).some(
         (size) => size && size.width && size.height && size.width > 0 && size.height > 0
       );
 
-    // If we have at least one valid size, use it as reference for all views
     let referenceAspect = this.aspectRatio;
     if (hasValidSizes) {
       const validSize = Object.values(viewportSizes).find(
@@ -211,6 +232,118 @@ export class CameraManager {
         `📏 ${viewName}: aspect=${aspect.toFixed(2)} (${size?.width || 'ref'}x${size?.height || 'ref'})`
       );
     });
+  }
+
+  /**
+   * ADDED: Enable Export Preview Mode
+   */
+  enableExportPreview(presetName = 'turbosquid_product') {
+    this.exportPreviewMode = true;
+    this.exportPreset = presetName;
+    
+    const preset = this.exportPresets[presetName];
+    if (preset) {
+      this.exportAspectRatio = preset.aspect;
+      this.forceUniformAspectRatio(this.exportAspectRatio);
+      
+      console.log(`🔍 Export Preview enabled: ${presetName} (${preset.aspect.toFixed(2)}:1)`);
+      this.adjustZoomForExport();
+    }
+  }
+
+  /**
+   * ADDED: Disable Export Preview Mode
+   */
+  disableExportPreview() {
+    this.exportPreviewMode = false;
+    this.exportAspectRatio = null;
+    this.exportPreset = null;
+    
+    console.log('👁️ Export Preview disabled - returning to adaptive mode');
+    this.updateCameraFrustums();
+  }
+
+  /**
+   * ADDED: Adjust zoom for export preview
+   */
+  adjustZoomForExport() {
+    if (!this.exportPreviewMode) return;
+    
+    // The frustum size defines exactly what will be visible in export
+    this.updateCameraFrustums();
+    console.log(`🔍 Zoom adjusted for export: frustum=${this.frustumSize.toFixed(2)}`);
+  }
+
+  /**
+   * ADDED: Sync with export settings
+   */
+  syncWithExportSettings(exportOptions) {
+    if (!exportOptions.resolution) return;
+    
+    const { width, height } = exportOptions.resolution;
+    const exportAspect = width / height;
+    
+    this.enableExportPreview('custom');
+    this.exportAspectRatio = exportAspect;
+    this.forceUniformAspectRatio(exportAspect);
+    
+    console.log(`🔄 Synced with export: ${width}x${height} (${exportAspect.toFixed(2)}:1)`);
+  }
+
+  /**
+   * ADDED: Get export preview bounds
+   */
+  getExportPreviewBounds() {
+    if (!this.exportPreviewMode) return null;
+    
+    const frustum = this.frustumSize;
+    const aspect = this.exportAspectRatio;
+    
+    return {
+      left: (-frustum * aspect) / 2,
+      right: (frustum * aspect) / 2,
+      top: frustum / 2,
+      bottom: -frustum / 2,
+      width: frustum * aspect,
+      height: frustum,
+      aspect: aspect
+    };
+  }
+
+  /**
+   * ADDED: Get viewport crop factor
+   */
+  getViewportCropFactor(viewportSize) {
+    if (!this.exportPreviewMode || !viewportSize) return 1.0;
+    
+    const viewportAspect = viewportSize.width / viewportSize.height;
+    const exportAspect = this.exportAspectRatio;
+    
+    if (viewportAspect > exportAspect) {
+      return viewportAspect / exportAspect;
+    } else {
+      return exportAspect / viewportAspect;
+    }
+  }
+
+  /**
+   * ADDED: Check if view is synced with export
+   */
+  isViewSyncedWithExport() {
+    return this.exportPreviewMode && this.exportAspectRatio !== null;
+  }
+
+  /**
+   * ADDED: Get export preview info
+   */
+  getExportPreviewInfo() {
+    return {
+      enabled: this.exportPreviewMode,
+      preset: this.exportPreset,
+      aspectRatio: this.exportAspectRatio,
+      frustumSize: this.frustumSize,
+      bounds: this.getExportPreviewBounds()
+    };
   }
 
   /**
