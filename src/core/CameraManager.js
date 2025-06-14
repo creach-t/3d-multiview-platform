@@ -1,7 +1,7 @@
 /**
  * CameraManager.js - Multi-Camera Management for 6 Orthographic Views
  * Manages Front, Back, Left, Right, Top, Bottom cameras with synchronized controls
- * FIXED: Uniform aspect ratio handling for all views
+ * FIXED: Proper orientation handling for all views
  */
 
 import * as THREE from 'three';
@@ -12,7 +12,7 @@ export class CameraManager {
     this.target = new THREE.Vector3(0, 0, 0);
     this.distance = 5;
     this.frustumSize = 4;
-    
+
     // Camera positions for orthographic views (normalized)
     this.viewPositions = {
       front: new THREE.Vector3(0, 0, 1),
@@ -22,18 +22,18 @@ export class CameraManager {
       top: new THREE.Vector3(0, 1, 0),
       bottom: new THREE.Vector3(0, -1, 0)
     };
-    
-    // Camera up vectors - FIXED: Uniform UP vectors for consistent aspect ratio
+
+    // FIXED: Correct UP vectors for each view
     this.viewUpVectors = {
-      front: new THREE.Vector3(0, 1, 0),
-      back: new THREE.Vector3(0, 1, 0),
-      left: new THREE.Vector3(0, 1, 0),
-      right: new THREE.Vector3(0, 1, 0),
-      top: new THREE.Vector3(0, 1, 0),     // FIXED: Use consistent Y-up
-      bottom: new THREE.Vector3(0, 1, 0)   // FIXED: Use consistent Y-up
+      front: new THREE.Vector3(0, 1, 0), // Y-up
+      back: new THREE.Vector3(0, 1, 0), // Y-up
+      left: new THREE.Vector3(0, 1, 0), // Y-up
+      right: new THREE.Vector3(0, 1, 0), // Y-up
+      top: new THREE.Vector3(0, 0, -1), // Z-down for top view
+      bottom: new THREE.Vector3(0, 0, 1) // Z-up for bottom view
     };
-    
-    // Special orientation handling for top/bottom views
+
+    // View orientations for consistent coordinate mapping
     this.viewOrientations = {
       front: { right: new THREE.Vector3(1, 0, 0), up: new THREE.Vector3(0, 1, 0) },
       back: { right: new THREE.Vector3(-1, 0, 0), up: new THREE.Vector3(0, 1, 0) },
@@ -42,9 +42,9 @@ export class CameraManager {
       top: { right: new THREE.Vector3(1, 0, 0), up: new THREE.Vector3(0, 0, -1) },
       bottom: { right: new THREE.Vector3(1, 0, 0), up: new THREE.Vector3(0, 0, 1) }
     };
-    
+
     this.aspectRatio = 1; // Will be updated per viewport
-    
+
     this.initCameras();
   }
 
@@ -52,12 +52,12 @@ export class CameraManager {
    * Initialize all 6 orthographic cameras
    */
   initCameras() {
-    Object.keys(this.viewPositions).forEach(viewName => {
+    Object.keys(this.viewPositions).forEach((viewName) => {
       this.cameras[viewName] = this.createOrthographicCamera(viewName);
     });
-    
+
     this.updateAllCameraPositions();
-    console.log('📷 Initialized 6 orthographic cameras with uniform aspect handling');
+    console.log('📷 Initialized 6 orthographic cameras with proper orientations');
   }
 
   /**
@@ -66,19 +66,19 @@ export class CameraManager {
   createOrthographicCamera(viewName) {
     const frustum = this.frustumSize;
     const aspect = this.aspectRatio;
-    
+
     const camera = new THREE.OrthographicCamera(
-      -frustum * aspect / 2,  // left
-      frustum * aspect / 2,   // right
-      frustum / 2,            // top
-      -frustum / 2,           // bottom
-      0.1,                    // near
-      1000                    // far
+      (-frustum * aspect) / 2, // left
+      (frustum * aspect) / 2, // right
+      frustum / 2, // top
+      -frustum / 2, // bottom
+      0.1, // near
+      1000 // far
     );
-    
+
     camera.name = `${viewName}Camera`;
     camera.userData = { viewName };
-    
+
     return camera;
   }
 
@@ -92,43 +92,27 @@ export class CameraManager {
   }
 
   /**
-   * Update a specific camera's position with special handling for top/bottom
+   * FIXED: Simplified camera position update without matrix manipulation
    */
   updateCameraPosition(viewName) {
     const camera = this.cameras[viewName];
     const position = this.viewPositions[viewName];
     const upVector = this.viewUpVectors[viewName];
-    
+
     if (!camera || !position) return;
-    
+
     // Calculate camera position
     const cameraPosition = position.clone().multiplyScalar(this.distance).add(this.target);
     camera.position.copy(cameraPosition);
-    
-    // Set camera orientation
-    camera.lookAt(this.target);
+
+    // Set camera orientation using proper up vector
     camera.up.copy(upVector);
-    
-    // Special handling for top and bottom views to ensure correct orientation
-    if (viewName === 'top' || viewName === 'bottom') {
-      // For top/bottom views, we need to manually set the rotation to ensure
-      // the aspect ratio is applied correctly
-      const direction = new THREE.Vector3().subVectors(this.target, camera.position).normalize();
-      const orientation = this.viewOrientations[viewName];
-      
-      // Create a rotation matrix for the view
-      const matrix = new THREE.Matrix4();
-      matrix.lookAt(camera.position, this.target, upVector);
-      camera.matrix.copy(matrix);
-      camera.matrixAutoUpdate = false;
-      camera.updateProjectionMatrix();
-      
-      // Re-enable auto update after setting
-      camera.matrixAutoUpdate = true;
-    }
-    
-    // Update projection matrix
+    camera.lookAt(this.target);
+
+    // REMOVED: No special matrix manipulation - let Three.js handle it naturally
     camera.updateProjectionMatrix();
+
+    console.log(`📷 Updated ${viewName} camera position`);
   }
 
   /**
@@ -156,50 +140,76 @@ export class CameraManager {
   }
 
   /**
-   * Update camera frustums for all cameras - UNIFORM TREATMENT
+   * Update camera frustums for all cameras
    */
   updateCameraFrustums() {
     Object.entries(this.cameras).forEach(([viewName, camera]) => {
       const aspect = camera.userData.aspect || this.aspectRatio;
       const frustum = this.frustumSize;
-      
-      // IDENTICAL frustum calculation for ALL views including top/bottom
-      camera.left = -frustum * aspect / 2;
-      camera.right = frustum * aspect / 2;
+
+      // Uniform frustum calculation for ALL views
+      camera.left = (-frustum * aspect) / 2;
+      camera.right = (frustum * aspect) / 2;
       camera.top = frustum / 2;
       camera.bottom = -frustum / 2;
-      
+
       camera.updateProjectionMatrix();
-      
-      console.log(`📐 Updated ${viewName} frustum: aspect=${aspect.toFixed(2)}, size=${frustum.toFixed(2)}`);
+
+      console.log(
+        `📐 Updated ${viewName} frustum: aspect=${aspect.toFixed(2)}, size=${frustum.toFixed(2)}`
+      );
     });
   }
 
   /**
-   * Update aspect ratios for cameras based on viewport sizes - UNIFORM TREATMENT
+   * FIXED: Robust aspect ratio handling with fallback to global aspect
    */
   updateAspectRatios(viewportSizes = {}) {
+    // First, determine if we have valid viewport sizes
+    const hasValidSizes =
+      Object.keys(viewportSizes).length > 0 &&
+      Object.values(viewportSizes).some(
+        (size) => size && size.width && size.height && size.width > 0 && size.height > 0
+      );
+
+    // If we have at least one valid size, use it as reference for all views
+    let referenceAspect = this.aspectRatio;
+    if (hasValidSizes) {
+      const validSize = Object.values(viewportSizes).find(
+        (size) => size && size.width && size.height && size.width > 0 && size.height > 0
+      );
+      if (validSize) {
+        referenceAspect = validSize.width / validSize.height;
+        console.log(
+          `📐 Using reference aspect ratio: ${referenceAspect.toFixed(2)} from ${validSize.width}x${validSize.height}`
+        );
+      }
+    }
+
     Object.entries(this.cameras).forEach(([viewName, camera]) => {
       const size = viewportSizes[viewName];
-      let aspect = this.aspectRatio;
-      
-      if (size && size.width && size.height) {
+      let aspect = referenceAspect;
+
+      // Use individual size if available and valid, otherwise use reference
+      if (size && size.width && size.height && size.width > 0 && size.height > 0) {
         aspect = size.width / size.height;
       }
-      
+
       // Store aspect ratio in userData
       camera.userData.aspect = aspect;
-      
-      // Apply IDENTICAL frustum calculation for ALL views
+
+      // Apply uniform frustum calculation
       const frustum = this.frustumSize;
-      camera.left = -frustum * aspect / 2;
-      camera.right = frustum * aspect / 2;
+      camera.left = (-frustum * aspect) / 2;
+      camera.right = (frustum * aspect) / 2;
       camera.top = frustum / 2;
       camera.bottom = -frustum / 2;
-      
+
       camera.updateProjectionMatrix();
-      
-      console.log(`📏 ${viewName}: aspect=${aspect.toFixed(2)} (${size?.width || 'auto'}x${size?.height || 'auto'})`);
+
+      console.log(
+        `📏 ${viewName}: aspect=${aspect.toFixed(2)} (${size?.width || 'ref'}x${size?.height || 'ref'})`
+      );
     });
   }
 
@@ -208,26 +218,28 @@ export class CameraManager {
    */
   frameModel(model) {
     if (!model) return;
-    
+
     // Calculate model bounding box
     const box = new THREE.Box3().setFromObject(model);
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
-    
+
     // Set target to model center
     this.setTarget(center);
-    
+
     // Calculate appropriate distance and frustum size
     const maxDimension = Math.max(size.x, size.y, size.z);
     const newFrustumSize = maxDimension * 1.2; // Add 20% padding
-    
+
     this.setFrustumSize(newFrustumSize);
-    
+
     // Distance should be far enough to avoid clipping
     const newDistance = Math.max(this.distance, maxDimension * 2);
     this.setDistance(newDistance);
-    
-    console.log(`📐 Framed model - Size: ${maxDimension.toFixed(2)}, Frustum: ${newFrustumSize.toFixed(2)}`);
+
+    console.log(
+      `📐 Framed model - Size: ${maxDimension.toFixed(2)}, Frustum: ${newFrustumSize.toFixed(2)}`
+    );
   }
 
   /**
@@ -251,10 +263,10 @@ export class CameraManager {
     this.target.set(0, 0, 0);
     this.distance = 5;
     this.frustumSize = 4;
-    
+
     this.updateAllCameraPositions();
     this.updateCameraFrustums();
-    
+
     console.log('🔄 Reset all cameras to default positions');
   }
 
@@ -267,56 +279,31 @@ export class CameraManager {
   }
 
   /**
-   * Pan all cameras (move target) - FIXED: Uniform coordinate system
+   * Pan all cameras (move target)
    */
   pan(deltaX, deltaY, viewName = 'front') {
     // Scale movement by frustum size for consistent feel across zoom levels
     const scale = this.frustumSize * 0.5;
-    
-    // Use UNIFORM coordinate system based on view orientations
+
+    // Use view orientations for consistent coordinate mapping
     const orientation = this.viewOrientations[viewName];
     if (!orientation) {
       console.warn(`No orientation defined for view: ${viewName}`);
       return;
     }
-    
+
     // Calculate movement vector using the view's orientation
     const movement = new THREE.Vector3()
       .addScaledVector(orientation.right, deltaX * scale)
       .addScaledVector(orientation.up, deltaY * scale);
-    
+
     // Apply movement to target
     this.target.add(movement);
     this.updateAllCameraPositions();
-    
-    console.log(`Pan ${viewName}: δ(${deltaX.toFixed(3)},${deltaY.toFixed(3)}) -> (${movement.x.toFixed(3)},${movement.y.toFixed(3)},${movement.z.toFixed(3)})`);
-  }
 
-  /**
-   * Orbit cameras around target (for rotation simulation)
-   */
-  orbit(deltaAzimuth, deltaPolar) {
-    // For orthographic cameras, we can simulate orbit by moving the target
-    // This creates a rotation effect while keeping camera positions fixed
-    
-    // Convert to spherical coordinates relative to front view
-    const spherical = new THREE.Spherical();
-    const offset = new THREE.Vector3().subVectors(this.target, new THREE.Vector3(0, 0, 0));
-    spherical.setFromVector3(offset);
-    
-    // Apply rotation
-    spherical.theta += deltaAzimuth;
-    spherical.phi += deltaPolar;
-    
-    // Constrain phi to prevent flipping
-    spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
-    
-    // Convert back to Cartesian and update target
-    offset.setFromSpherical(spherical);
-    // Don't actually move target for orbit - this was causing issues
-    // Instead, just provide visual feedback
-    
-    console.log(`Orbit: ${deltaAzimuth.toFixed(3)}, ${deltaPolar.toFixed(3)}`);
+    console.log(
+      `Pan ${viewName}: δ(${deltaX.toFixed(3)},${deltaY.toFixed(3)}) -> (${movement.x.toFixed(3)},${movement.y.toFixed(3)},${movement.z.toFixed(3)})`
+    );
   }
 
   /**
@@ -367,19 +354,19 @@ export class CameraManager {
   createPerspectiveCamera(viewName, fov = 45) {
     const aspect = this.aspectRatio;
     const camera = new THREE.PerspectiveCamera(fov, aspect, 0.1, 1000);
-    
+
     // Position like orthographic camera but with perspective
     const position = this.viewPositions[viewName];
     const upVector = this.viewUpVectors[viewName];
-    
+
     const cameraPosition = position.clone().multiplyScalar(this.distance).add(this.target);
     camera.position.copy(cameraPosition);
-    camera.lookAt(this.target);
     camera.up.copy(upVector);
-    
+    camera.lookAt(this.target);
+
     camera.name = `${viewName}PerspectiveCamera`;
     camera.userData = { viewName, type: 'perspective' };
-    
+
     return camera;
   }
 
@@ -389,14 +376,14 @@ export class CameraManager {
   switchToMode(mode = 'orthographic') {
     if (mode === 'perspective') {
       // Replace orthographic cameras with perspective ones
-      Object.keys(this.cameras).forEach(viewName => {
+      Object.keys(this.cameras).forEach((viewName) => {
         this.cameras[viewName] = this.createPerspectiveCamera(viewName);
       });
     } else {
       // Switch back to orthographic
       this.initCameras();
     }
-    
+
     console.log(`📷 Switched to ${mode} cameras`);
   }
 
@@ -406,7 +393,7 @@ export class CameraManager {
   getCameraParameters(viewName) {
     const camera = this.cameras[viewName];
     if (!camera) return null;
-    
+
     return {
       position: camera.position.clone(),
       target: this.target.clone(),
@@ -423,20 +410,20 @@ export class CameraManager {
   applyCameraParameters(viewName, params) {
     const camera = this.cameras[viewName];
     if (!camera || !params) return;
-    
+
     camera.position.copy(params.position);
     this.target.copy(params.target);
     camera.up.copy(params.up);
-    
+
     if (params.frustumSize) {
       this.frustumSize = params.frustumSize;
       this.updateCameraFrustums();
     }
-    
+
     if (params.distance) {
       this.distance = params.distance;
     }
-    
+
     camera.lookAt(this.target);
     camera.updateProjectionMatrix();
   }
@@ -458,12 +445,12 @@ export class CameraManager {
    */
   restoreState(state) {
     if (!state) return;
-    
+
     this.target.copy(state.target);
     this.distance = state.distance;
     this.frustumSize = state.frustumSize;
     this.aspectRatio = state.aspectRatio;
-    
+
     this.updateAllCameraPositions();
     this.updateCameraFrustums();
   }
@@ -474,7 +461,7 @@ export class CameraManager {
   getViewMatrix(viewName) {
     const camera = this.cameras[viewName];
     if (!camera) return null;
-    
+
     camera.updateMatrixWorld();
     return camera.matrixWorldInverse.clone();
   }
@@ -485,7 +472,7 @@ export class CameraManager {
   getProjectionMatrix(viewName) {
     const camera = this.cameras[viewName];
     if (!camera) return null;
-    
+
     return camera.projectionMatrix.clone();
   }
 
@@ -493,11 +480,60 @@ export class CameraManager {
    * Dispose of cameras
    */
   dispose() {
-    Object.keys(this.cameras).forEach(viewName => {
+    Object.keys(this.cameras).forEach((viewName) => {
       delete this.cameras[viewName];
     });
-    
-    this.cameras = {}; 
+
+    this.cameras = {};
     console.log('🗑️ Disposed camera manager');
+  }
+
+  /**
+   * ADDED: Force uniform aspect ratio for all cameras
+   */
+  forceUniformAspectRatio(targetAspect = null) {
+    // Use provided aspect ratio or calculate from first available viewport
+    const aspect = targetAspect || this.aspectRatio;
+
+    console.log(`🔄 Forcing uniform aspect ratio: ${aspect.toFixed(2)} for all views`);
+
+    Object.entries(this.cameras).forEach(([viewName, camera]) => {
+      // Store aspect ratio in userData
+      camera.userData.aspect = aspect;
+
+      // Apply uniform frustum calculation
+      const frustum = this.frustumSize;
+      camera.left = (-frustum * aspect) / 2;
+      camera.right = (frustum * aspect) / 2;
+      camera.top = frustum / 2;
+      camera.bottom = -frustum / 2;
+
+      camera.updateProjectionMatrix();
+
+      console.log(`📐 ${viewName}: forced aspect=${aspect.toFixed(2)}`);
+    });
+
+    // Update global aspect ratio
+    this.aspectRatio = aspect;
+  }
+
+  /**
+   * ADDED: Debug method to verify camera orientations
+   */
+  debugCameraOrientations() {
+    console.log('🔍 Camera Orientations Debug:');
+    Object.entries(this.cameras).forEach(([viewName, camera]) => {
+      console.log(`${viewName}:`);
+      console.log(
+        `  Position: (${camera.position.x.toFixed(2)}, ${camera.position.y.toFixed(2)}, ${camera.position.z.toFixed(2)})`
+      );
+      console.log(
+        `  Up: (${camera.up.x.toFixed(2)}, ${camera.up.y.toFixed(2)}, ${camera.up.z.toFixed(2)})`
+      );
+      console.log(
+        `  Frustum: L=${camera.left.toFixed(2)}, R=${camera.right.toFixed(2)}, T=${camera.top.toFixed(2)}, B=${camera.bottom.toFixed(2)}`
+      );
+      console.log(`  Aspect: ${(camera.userData.aspect || this.aspectRatio).toFixed(2)}`);
+    });
   }
 }
