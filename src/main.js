@@ -14,6 +14,8 @@ import { PreviewManager } from './ui/PreviewManager.js';
 import { ImageExporter } from './export/ImageExporter.js';
 import { Templates } from './export/Templates.js';
 import { BatchProcessor } from './export/BatchProcessor.js';
+// AJOUT: Import ExportPreviewIntegration
+import { ExportPreviewIntegration } from './ui/ExportPreviewIntegration.js';
 
 /**
  * Main Application Class
@@ -45,6 +47,8 @@ class MultiViewPlatform {
     this.imageExporter = null;
     this.templates = null;
     this.batchProcessor = null;
+    // AJOUT: Export preview integration
+    this.exportPreview = null;
     
     // DOM elements
     this.container = null;
@@ -75,6 +79,9 @@ class MultiViewPlatform {
       
       // Initialize export system
       this.initExportSystem();
+      
+      // AJOUT: Initialize export preview APRÈS initExportSystem
+      this.initExportPreview();
       
       // Setup event listeners
       this.setupEventListeners();
@@ -228,6 +235,34 @@ class MultiViewPlatform {
       console.error('Export error:', data);
       this.showToast(`Erreur export ${data.viewName}: ${data.error}`, 'error');
     });
+  }
+
+  /**
+   * AJOUT: Initialize export preview system
+   */
+  initExportPreview() {
+    // Initialize export preview integration
+    this.exportPreview = new ExportPreviewIntegration(
+      this,              // app instance
+      this.cameraManager,
+      this.imageExporter
+    );
+    
+    console.log('🎯 Export Preview Integration initialized');
+  }
+
+  /**
+   * AJOUT: Method pour render all views (requis par ExportPreviewIntegration)
+   */
+  renderAllViews() {
+    if (this.renderer && this.cameraManager && this.scene) {
+      ['front', 'back', 'left', 'right', 'top', 'bottom'].forEach(viewName => {
+        const camera = this.cameraManager.getCamera(viewName);
+        if (camera) {
+          this.renderer.renderSingle(viewName, this.scene, camera);
+        }
+      });
+    }
   }
 
   /**
@@ -838,6 +873,9 @@ class MultiViewPlatform {
    * Cleanup and dispose resources
    */
   dispose() {
+    if (this.exportPreview) {
+      this.exportPreview.destroy();
+    }
     if (this.batchProcessor) {
       this.batchProcessor.dispose();
     }
