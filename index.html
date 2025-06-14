@@ -7,7 +7,7 @@
     <meta name="description" content="Plateforme de visualisation 3D multi-vues pour optimiser vos exports TurboSquid et CGTrader">
     
     <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" type="image/svg+xml" href="/public/favicon.svg">
     
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -44,7 +44,7 @@
             </div>
             
             <div class="header-actions">
-                <button class="theme-toggle" id="theme-toggle" title="Toggle theme">
+                <button class="theme-toggle" id="theme-toggle" title="Toggle theme (Ctrl+Shift+T)">
                     <i data-lucide="sun" class="theme-icon light"></i>
                     <i data-lucide="moon" class="theme-icon dark"></i>
                 </button>
@@ -74,7 +74,7 @@
                         <h3>Import Model</h3>
                     </div>
                     
-                    <div id="file-upload-zone" class="file-upload-zone">
+                    <div id="file-upload-zone" class="file-upload-zone interactive-element">
                         <div class="upload-content">
                             <div class="upload-icon">
                                 <i data-lucide="file-plus"></i>
@@ -108,19 +108,19 @@
                     <div class="setting-group">
                         <label class="setting-label">Lighting Preset</label>
                         <div class="preset-grid">
-                            <button type="button" data-preset="studio" class="preset-btn active">
+                            <button type="button" data-preset="studio" class="preset-btn active interactive-element">
                                 <i data-lucide="camera"></i>
                                 <span>Studio</span>
                             </button>
-                            <button type="button" data-preset="natural" class="preset-btn">
+                            <button type="button" data-preset="natural" class="preset-btn interactive-element">
                                 <i data-lucide="sun"></i>
                                 <span>Natural</span>
                             </button>
-                            <button type="button" data-preset="dramatic" class="preset-btn">
+                            <button type="button" data-preset="dramatic" class="preset-btn interactive-element">
                                 <i data-lucide="zap"></i>
                                 <span>Dramatic</span>
                             </button>
-                            <button type="button" data-preset="technical" class="preset-btn">
+                            <button type="button" data-preset="technical" class="preset-btn interactive-element">
                                 <i data-lucide="grid-3x3"></i>
                                 <span>Technical</span>
                             </button>
@@ -130,19 +130,19 @@
                     <div class="setting-group">
                         <label class="setting-label">Background</label>
                         <div class="background-options">
-                            <button type="button" data-background="turbosquid" class="bg-option active">
+                            <button type="button" data-background="turbosquid" class="bg-option active interactive-element">
                                 <div class="bg-preview bg-turbosquid"></div>
                                 <span>TurboSquid</span>
                             </button>
-                            <button type="button" data-background="white" class="bg-option">
+                            <button type="button" data-background="white" class="bg-option interactive-element">
                                 <div class="bg-preview bg-white"></div>
                                 <span>White</span>
                             </button>
-                            <button type="button" data-background="transparent" class="bg-option">
+                            <button type="button" data-background="transparent" class="bg-option interactive-element">
                                 <div class="bg-preview bg-transparent"></div>
                                 <span>Transparent</span>
                             </button>
-                            <button type="button" data-background="gradient" class="bg-option">
+                            <button type="button" data-background="gradient" class="bg-option interactive-element">
                                 <div class="bg-preview bg-gradient"></div>
                                 <span>Gradient</span>
                             </button>
@@ -159,19 +159,19 @@
                     </div>
                     
                     <div class="controls-grid">
-                        <button type="button" id="reset-camera" class="control-btn">
+                        <button type="button" id="reset-camera" class="control-btn interactive-element" title="Reset camera position">
                             <i data-lucide="rotate-ccw"></i>
                             <span>Reset Camera</span>
                         </button>
-                        <button type="button" id="center-model" class="control-btn">
+                        <button type="button" id="center-model" class="control-btn interactive-element" title="Center model in view">
                             <i data-lucide="target"></i>
                             <span>Center Model</span>
                         </button>
-                        <button type="button" id="auto-frame" class="control-btn">
+                        <button type="button" id="auto-frame" class="control-btn interactive-element" title="Auto-frame model">
                             <i data-lucide="focus"></i>
                             <span>Auto Frame</span>
                         </button>
-                        <button type="button" id="wireframe-toggle" class="control-btn">
+                        <button type="button" id="wireframe-toggle" class="control-btn interactive-element" title="Toggle wireframe view">
                             <i data-lucide="box-select"></i>
                             <span>Wireframe</span>
                         </button>
@@ -204,7 +204,7 @@
                         </select>
                     </div>
                     
-                    <button type="button" id="export-all" class="export-btn" disabled>
+                    <button type="button" id="export-all" class="export-btn interactive-element" disabled title="Export all views (Ctrl+E)">
                         <i data-lucide="rocket"></i>
                         <span>Export All Views</span>
                         <div class="btn-glow"></div>
@@ -265,21 +265,27 @@
             <div class="viewport-header">
                 <h2 class="viewport-title">Multi-View Preview</h2>
                 <div class="viewport-controls">
-                    <button class="view-control-btn" id="sync-cameras" title="Sync all cameras">
-                        <i data-lucide="link"></i>
-                    </button>
-                    <button class="view-control-btn" id="fullscreen-toggle" title="Toggle fullscreen">
-                        <i data-lucide="maximize"></i>
-                    </button>
+                    <div class="tooltip">
+                        <button class="view-control-btn" id="sync-cameras" title="Sync all cameras">
+                            <i data-lucide="link"></i>
+                        </button>
+                        <span class="tooltip-text">Sync Cameras</span>
+                    </div>
+                    <div class="tooltip">
+                        <button class="view-control-btn" id="fullscreen-toggle" title="Toggle fullscreen">
+                            <i data-lucide="maximize"></i>
+                        </button>
+                        <span class="tooltip-text">Fullscreen</span>
+                    </div>
                 </div>
             </div>
             
             <div class="viewport-grid">
                 <!-- Front View -->
-                <div class="viewport" data-view="front">
+                <div class="viewport" data-view="front" tabindex="0">
                     <div class="viewport-label">
                         <span class="view-name">Front View</span>
-                        <button class="capture-btn" data-view="front">
+                        <button class="capture-btn" data-view="front" aria-label="Capture front view">
                             <i data-lucide="camera"></i>
                         </button>
                     </div>
@@ -290,10 +296,10 @@
                 </div>
 
                 <!-- Back View -->
-                <div class="viewport" data-view="back">
+                <div class="viewport" data-view="back" tabindex="0">
                     <div class="viewport-label">
                         <span class="view-name">Back View</span>
-                        <button class="capture-btn" data-view="back">
+                        <button class="capture-btn" data-view="back" aria-label="Capture back view">
                             <i data-lucide="camera"></i>
                         </button>
                     </div>
@@ -304,10 +310,10 @@
                 </div>
 
                 <!-- Left View -->
-                <div class="viewport" data-view="left">
+                <div class="viewport" data-view="left" tabindex="0">
                     <div class="viewport-label">
                         <span class="view-name">Left View</span>
-                        <button class="capture-btn" data-view="left">
+                        <button class="capture-btn" data-view="left" aria-label="Capture left view">
                             <i data-lucide="camera"></i>
                         </button>
                     </div>
@@ -318,10 +324,10 @@
                 </div>
 
                 <!-- Right View -->
-                <div class="viewport" data-view="right">
+                <div class="viewport" data-view="right" tabindex="0">
                     <div class="viewport-label">
                         <span class="view-name">Right View</span>
-                        <button class="capture-btn" data-view="right">
+                        <button class="capture-btn" data-view="right" aria-label="Capture right view">
                             <i data-lucide="camera"></i>
                         </button>
                     </div>
@@ -332,10 +338,10 @@
                 </div>
 
                 <!-- Top View -->
-                <div class="viewport" data-view="top">
+                <div class="viewport" data-view="top" tabindex="0">
                     <div class="viewport-label">
                         <span class="view-name">Top View</span>
-                        <button class="capture-btn" data-view="top">
+                        <button class="capture-btn" data-view="top" aria-label="Capture top view">
                             <i data-lucide="camera"></i>
                         </button>
                     </div>
@@ -346,10 +352,10 @@
                 </div>
 
                 <!-- Bottom View -->
-                <div class="viewport" data-view="bottom">
+                <div class="viewport" data-view="bottom" tabindex="0">
                     <div class="viewport-label">
                         <span class="view-name">Bottom View</span>
-                        <button class="capture-btn" data-view="bottom">
+                        <button class="capture-btn" data-view="bottom" aria-label="Capture bottom view">
                             <i data-lucide="camera"></i>
                         </button>
                     </div>
@@ -387,16 +393,8 @@
     <script>
         // Initialize Lucide icons
         lucide.createIcons();
-        
-        // Theme toggle functionality
-        const themeToggle = document.getElementById('theme-toggle');
-        const body = document.body;
-        
-        themeToggle.addEventListener('click', () => {
-            body.classList.toggle('theme-dark');
-            body.classList.toggle('theme-light');
-        });
     </script>
+    <script src="/src/ui/modern-ui.js"></script>
     <script type="module" src="/src/main.js"></script>
 </body>
 </html>
