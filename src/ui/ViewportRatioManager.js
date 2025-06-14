@@ -1,42 +1,78 @@
 /**
- * ViewportRatioManager.js - CSS override plus agressif pour forcer ratios
+ * ViewportRatioManager.js - Disable grid system and apply ratios
  */
 
 export class ViewportRatioManager {
   constructor() {
     this.styleElement = null;
     this.currentRatio = null;
+    this.originalStyles = new Map();
   }
 
-  /**
-   * Force le ratio avec CSS ultra-spécifique
-   */
   setExportRatio(aspectRatio) {
     this.currentRatio = aspectRatio;
-    this.applyAggressiveCSS(aspectRatio);
-    console.log(`📐 Forcing ratio: ${aspectRatio.toFixed(3)} with aggressive CSS`);
+    this.disableGridSystem();
+    this.applyRatioSystem(aspectRatio);
+    console.log(`📐 Grid disabled, ratio applied: ${aspectRatio.toFixed(3)}`);
   }
 
   /**
-   * CSS ultra-agressif qui override tout
+   * Disable all grid systems
    */
-  applyAggressiveCSS(ratio) {
+  disableGridSystem() {
     if (this.styleElement) {
       this.styleElement.remove();
     }
 
     this.styleElement = document.createElement('style');
-    this.styleElement.id = 'viewport-ratio-override';
+    this.styleElement.id = 'grid-disable-override';
     
-    // CSS ultra-spécifique avec priorité maximale
     this.styleElement.textContent = `
-      /* Override TOUT le système de grille */
+      /* DISABLE ALL GRIDS */
       .viewport-grid,
-      .viewport-grid > *,
       .viewport-container,
-      .viewport-container > *,
+      [class*="grid"],
+      [style*="grid"],
+      [style*="display: grid"],
+      [style*="display:grid"] {
+        display: flex !important;
+        flex-direction: column !important;
+        flex-wrap: wrap !important;
+        grid-template-columns: none !important;
+        grid-template-rows: none !important;
+        grid-auto-rows: none !important;
+        grid-auto-columns: none !important;
+        grid-gap: 0 !important;
+        gap: 5px !important;
+      }
+      
+      /* Reset all viewport children */
+      .viewport-grid > *,
+      .viewport-container > * {
+        flex: none !important;
+        width: 100% !important;
+        height: auto !important;
+        grid-column: unset !important;
+        grid-row: unset !important;
+      }
+    `;
+    
+    document.head.appendChild(this.styleElement);
+  }
+
+  /**
+   * Apply ratio system after grid removal
+   */
+  applyRatioSystem(ratio) {
+    const ratioStyle = document.createElement('style');
+    ratioStyle.id = 'ratio-system';
+    
+    ratioStyle.textContent = `
+      /* Apply ratios to all viewport elements */
+      canvas,
+      canvas:parent,
       .viewport,
-      .view-container,
+      .view,
       [class*="viewport"],
       [class*="view"],
       [id*="canvas"] {
@@ -45,56 +81,62 @@ export class ViewportRatioManager {
         height: auto !important;
         max-height: none !important;
         min-height: 0 !important;
-        flex: none !important;
-        grid-template-rows: none !important;
-        grid-template-columns: none !important;
-      }
-      
-      /* Force sur TOUS les éléments contenant des canvas */
-      canvas {
-        aspect-ratio: ${ratio} !important;
-        width: 100% !important;
-        height: 100% !important;
-        object-fit: fill !important;
-      }
-      
-      /* Sélecteurs par ID spécifiques */
-      #canvas-front, #canvas-back, #canvas-left, 
-      #canvas-right, #canvas-top, #canvas-bottom {
-        aspect-ratio: ${ratio} !important;
-      }
-      
-      /* Override parents des canvas */
-      #canvas-front:parent, #canvas-back:parent,
-      #canvas-left:parent, #canvas-right:parent,
-      #canvas-top:parent, #canvas-bottom:parent,
-      [id*="front"], [id*="back"], [id*="left"],
-      [id*="right"], [id*="top"], [id*="bottom"] {
-        aspect-ratio: ${ratio} !important;
-        height: auto !important;
-      }
-      
-      /* Force display et layout */
-      * {
-        box-sizing: border-box !important;
       }
     `;
     
-    document.head.appendChild(this.styleElement);
+    document.head.appendChild(ratioStyle);
     
-    // Force un reflow
-    setTimeout(() => {
-      document.body.offsetHeight;
-    }, 10);
+    // Force on DOM elements directly
+    this.forceElementStyles(ratio);
+  }
+
+  /**
+   * Force styles directly on DOM elements
+   */
+  forceElementStyles(ratio) {
+    // Disable grid on grid containers
+    document.querySelectorAll('[class*="grid"], [style*="grid"]').forEach(el => {
+      el.style.setProperty('display', 'flex', 'important');
+      el.style.setProperty('flex-direction', 'column', 'important');
+      el.style.setProperty('grid-template-columns', 'none', 'important');
+      el.style.setProperty('grid-template-rows', 'none', 'important');
+    });
+
+    // Apply ratios to viewports
+    document.querySelectorAll('canvas').forEach(canvas => {
+      canvas.style.setProperty('aspect-ratio', ratio.toString(), 'important');
+      
+      const parent = canvas.parentElement;
+      if (parent) {
+        parent.style.setProperty('aspect-ratio', ratio.toString(), 'important');
+        parent.style.setProperty('height', 'auto', 'important');
+        parent.style.setProperty('width', '100%', 'important');
+      }
+    });
   }
 
   removeFixedRatio() {
+    // Remove style elements
+    document.querySelectorAll('#grid-disable-override, #ratio-system').forEach(el => el.remove());
+    
     if (this.styleElement) {
       this.styleElement.remove();
       this.styleElement = null;
     }
+
+    // Restore original styles
+    document.querySelectorAll('canvas').forEach(canvas => {
+      canvas.style.removeProperty('aspect-ratio');
+      const parent = canvas.parentElement;
+      if (parent) {
+        parent.style.removeProperty('aspect-ratio');
+        parent.style.removeProperty('height');
+        parent.style.removeProperty('display');
+      }
+    });
+
     this.currentRatio = null;
-    console.log('👁️ Aggressive CSS removed');
+    console.log('🔄 Grid system restored');
   }
 
   getCurrentRatio() {
@@ -103,34 +145,5 @@ export class ViewportRatioManager {
 
   isFixedRatioActive() {
     return this.currentRatio !== null;
-  }
-
-  /**
-   * Debug - force directement sur éléments trouvés
-   */
-  forceDirectly(ratio) {
-    // Trouver TOUS les éléments possibles
-    const selectors = [
-      'canvas',
-      '[id*="canvas"]',
-      '.viewport',
-      '.view',
-      '[class*="viewport"]',
-      '[class*="view"]'
-    ];
-    
-    selectors.forEach(selector => {
-      const elements = document.querySelectorAll(selector);
-      elements.forEach(el => {
-        el.style.setProperty('aspect-ratio', ratio, 'important');
-        el.style.setProperty('height', 'auto', 'important');
-        if (el.parentElement) {
-          el.parentElement.style.setProperty('aspect-ratio', ratio, 'important');
-          el.parentElement.style.setProperty('height', 'auto', 'important');
-        }
-      });
-    });
-    
-    console.log(`🔨 Force applied directly on ${document.querySelectorAll('canvas').length} elements`);
   }
 }
